@@ -1,41 +1,56 @@
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from .database import Base
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, JSON, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- TABELAS ---
 
 class Loja(Base):
     __tablename__ = "lojas"
-    id = Column(Integer, primary_key=True, index=True)
-    store_id = Column(String, unique=True, index=True)
+    store_id = Column(String, primary_key=True, index=True)
     access_token = Column(String)
     nome_loja = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    email = Column(String, nullable=True)
 
 class Produto(Base):
     __tablename__ = "produtos"
-    id = Column(Integer, primary_key=True, index=True) # ID interno do banco
-    nuvemshop_id = Column(String, unique=True, index=True) # ID da Nuvemshop
+    id = Column(String, primary_key=True, index=True)
     store_id = Column(String, index=True)
     name = Column(String)
+    price = Column(Float)
+    stock = Column(Integer, default=0)
     sku = Column(String, nullable=True)
-    price = Column(Float, nullable=True)
-    promotional_price = Column(Float, nullable=True)
-    stock = Column(Integer, nullable=True)
     image_url = Column(String, nullable=True)
+    product_url = Column(String, nullable=True)
+    categories_json = Column(JSON, nullable=True)
+    variants_json = Column(JSON, nullable=True)
+    tags = Column(String, nullable=True) # Novo para PWA (filtros)
+
+# --- A NOVIDADE: CONFIGURAÇÃO DO PWA ---
+class AppConfig(Base):
+    __tablename__ = "app_configs"
     
-    # --- NOVO CAMPO AQUI ---
-    categories_json = Column(Text, nullable=True) # Vai guardar: "Tênis, Lebron, Basquete"
-    # -----------------------
-
-    variants_json = Column(Text, nullable=True) 
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-class HistoryLog(Base):
-    __tablename__ = "history_logs"
     id = Column(Integer, primary_key=True, index=True)
-    store_id = Column(String)
-    action_summary = Column(String)
-    full_command = Column(Text)
-    affected_count = Column(Integer)
-    status = Column(String) # SUCCESS, ERROR, REVERTED
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    store_id = Column(String, unique=True, index=True) # Um App por Loja
+    
+    app_name = Column(String, default="Minha Loja")
+    theme_color = Column(String, default="#000000") # Cor do topo do celular
+    logo_url = Column(String, nullable=True) # URL da logo
+    
+    whatsapp_number = Column(String, nullable=True) # Para botão flutuante
+    instagram_url = Column(String, nullable=True)
+    
+    is_active = Column(Boolean, default=True) # Controle de pagamento
