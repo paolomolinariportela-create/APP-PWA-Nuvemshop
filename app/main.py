@@ -12,7 +12,7 @@ from .models import Loja, AppConfig
 
 # Recria as tabelas limpas
 Base.metadata.create_all(bind=engine)
-app = FastAPI()
+app = FastAPI() Query
 
 # Configurações
 CLIENT_ID = os.getenv("CLIENT_ID")
