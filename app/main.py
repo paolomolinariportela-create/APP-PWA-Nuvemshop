@@ -1,6 +1,6 @@
 import os
 import requests
-from fastapi import FastAPI, Depends, Response
+from fastapi import FastAPI, Depends, Response, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
