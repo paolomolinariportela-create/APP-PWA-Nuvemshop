@@ -10,6 +10,7 @@ jinja2
 httpx
 pydantic
 PyJWT
+cryptography
 
 
 
