@@ -1,45 +1,67 @@
 import os
 import requests
 from datetime import datetime
-from fastapi import FastAPI, Depends, Response, Query
+from fastapi import FastAPI, Depends, Response, Query, HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
+from cryptography.fernet import Fernet # MÓDULO DE SEGURANÇA
 
 from .database import engine, Base, get_db
-# ADICIONADO: Importando VendaApp
 from .models import Loja, AppConfig, VendaApp
 
 # --- INICIALIZAÇÃO DO BANCO ---
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# --- VARIÁVEIS DE AMBIENTE ---
+# --- VARIÁVEIS DE AMBIENTE E SEGURANÇA ---
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
-# Configuração de URL do Backend (HTTPS Obrigatório)
+# Configuração da Chave de Criptografia (CRÍTICO)
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+if not ENCRYPTION_KEY:
+    # Se não tiver chave, usamos uma temporária apenas para não quebrar o deploy inicial,
+    # mas em produção isso deve ser configurado no Railway!
+    print("⚠️ AVISO: ENCRYPTION_KEY não encontrada. Usando chave temporária (INSEGURO PARA PRODUÇÃO).")
+    ENCRYPTION_KEY = Fernet.generate_key().decode()
+
+cipher_suite = Fernet(ENCRYPTION_KEY)
+
+# Configuração de URL (Backend e Frontend)
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
 
-# Configuração de URL do Frontend (HTTPS Obrigatório)
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 if FRONTEND_URL and not FRONTEND_URL.startswith("http"):
     FRONTEND_URL = f"https://{FRONTEND_URL}"
 
-# --- CORS (Permite conexão com qualquer lugar) ---
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- MODELOS DE DADOS (Pydantic) ---
+# --- FUNÇÕES DE CRIPTOGRAFIA ---
+def encrypt_token(token: str) -> str:
+    """Transforma o token real em um código ilegível."""
+    return cipher_suite.encrypt(token.encode()).decode()
+
+def decrypt_token(encrypted_token: str) -> str:
+    """Recupera o token real a partir do código ilegível."""
+    try:
+        return cipher_suite.decrypt(encrypted_token.encode()).decode()
+    except Exception as e:
+        print(f"❌ Erro fatal: Não foi possível descriptografar o token: {e}")
+        return None
+
+# --- MODELOS DE DADOS ---
 class ConfigPayload(BaseModel):
     store_id: str
     app_name: str
@@ -47,33 +69,36 @@ class ConfigPayload(BaseModel):
     logo_url: Optional[str] = None
     whatsapp: Optional[str] = None
 
-# ADICIONADO: Modelo para receber a venda
 class VendaPayload(BaseModel):
     store_id: str
     valor: str
 
-# --- FUNÇÕES AUXILIARES ---
+# --- FUNÇÕES AUXILIARES (BLINDADAS) ---
 
-def inject_script_tag(store_id: str, access_token: str):
-    """Insere o script loader.js no rodapé da loja automaticamente."""
+def inject_script_tag(store_id: str, encrypted_access_token: str):
+    """Insere o script loader.js (Decripta o token na hora de usar)"""
+    # 1. Decripta para usar na chamada API
+    access_token = decrypt_token(encrypted_access_token)
+    if not access_token: return
+
     try:
         url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
         headers = {
             "Authentication": f"bearer {access_token}",
-            "User-Agent": "App PWA Builder" 
+            "User-Agent": "App PWA Builder (Security Enhanced)" 
         }
         
         script_url = f"{BACKEND_URL}/loader.js?store_id={store_id}"
         
         payload = {
-            "name": "PWA Loader",
-            "description": "Transforma a loja em App",
+            "name": "PWA Loader Pro",
+            "description": "Transforma a loja em App (Seguro)",
             "html": f"<script src='{script_url}' async></script>",
-            "event": "onload", # Tenta onload
+            "event": "onload",
             "where": "store"
         }
 
-        # Verifica se já existe para não duplicar
+        # Verifica existência
         check = requests.get(url, headers=headers)
         if check.status_code == 200:
             scripts = check.json()
@@ -83,69 +108,47 @@ def inject_script_tag(store_id: str, access_token: str):
                         print(f"✅ Script já existe na loja {store_id}")
                         return
 
-        # Cria o script
+        # Cria
         requests.post(url, json=payload, headers=headers)
         print(f"✅ Script injetado com sucesso na loja {store_id}")
     except Exception as e:
-        print(f"⚠️ Aviso na injeção de script: {e}")
+        print(f"⚠️ Aviso na injeção: {e}")
 
-def create_landing_page_internal(store_id, access_token, color="#000000"):
-    """Cria a página /pages/app dentro da loja do cliente."""
+def create_landing_page_internal(store_id, encrypted_access_token, color="#000000"):
+    """Cria a página /pages/app (Decripta o token na hora de usar)"""
+    # 1. Decripta para usar na chamada API
+    access_token = decrypt_token(encrypted_access_token)
+    if not access_token: return
+
     try:
         url = f"https://api.tiendanube.com/v1/{store_id}/pages"
         headers = { "Authentication": f"bearer {access_token}", "User-Agent": "App PWA Builder" }
         
-        # HTML Bonito da Landing Page (Responsivo)
         html_body = f"""
         <div style="text-align: center; padding: 40px 20px; font-family: sans-serif;">
             <div style="background: #f9f9f9; padding: 30px; border-radius: 20px; display: inline-block; max-width: 400px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <h1 style="margin: 0 0 10px 0; color: #333;">Baixe Nosso App 📲</h1>
                 <p style="color: #666; margin-bottom: 25px;">Navegue mais rápido e receba ofertas exclusivas.</p>
-                
-                <button onclick="if(window.installPWA) {{ window.installPWA() }} else {{ alert('Abra esta página no celular para instalar!') }}" style="
-                    background-color: {color}; 
-                    color: white; 
-                    border: none; 
-                    padding: 15px 30px; 
-                    font-size: 18px; 
-                    border-radius: 50px; 
-                    cursor: pointer; 
-                    width: 100%; 
-                    font-weight: bold;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-                    transition: transform 0.2s;
-                ">
-                    Instalar Agora ⬇️
-                </button>
-                
-                <p style="font-size: 12px; color: #999; margin-top: 15px;">
-                    Disponível para Android e iOS
-                </p>
+                <button onclick="if(window.installPWA) {{ window.installPWA() }} else {{ alert('Abra esta página no celular para instalar!') }}" style="background-color: {color}; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 50px; cursor: pointer; width: 100%; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">Instalar Agora ⬇️</button>
+                <p style="font-size: 12px; color: #999; margin-top: 15px;">Disponível para Android e iOS</p>
             </div>
         </div>
         """
         
-        data = { 
-            "title": "Baixe nosso App", 
-            "body": html_body, 
-            "published": True, 
-            "handle": "app" 
-        }
+        data = { "title": "Baixe nosso App", "body": html_body, "published": True, "handle": "app" }
         
         res = requests.post(url, json=data, headers=headers)
         if res.status_code == 201:
             print(f"✅ Página /pages/app criada para loja {store_id}")
-        else:
-             print(f"⚠️ Página não criada (pode já existir): {res.status_code}")
              
     except Exception as e:
-        print(f"❌ Erro ao criar página interna: {e}")
+        print(f"❌ Erro ao criar página: {e}")
 
 # --- ROTAS PRINCIPAIS ---
 
 @app.get("/")
 def home():
-    return {"status": "Backend Online", "frontend": FRONTEND_URL}
+    return {"status": "Backend Seguro Online 🔒", "frontend": FRONTEND_URL}
 
 @app.get("/admin/config/{store_id}")
 def get_config(store_id: str, db: Session = Depends(get_db)):
@@ -156,7 +159,6 @@ def get_config(store_id: str, db: Session = Depends(get_db)):
 
 @app.get("/admin/store-info/{store_id}")
 def get_store_info(store_id: str, db: Session = Depends(get_db)):
-    """Retorna a URL pública da loja para o Dashboard mostrar"""
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
     if not loja: return {"url": ""}
     return {"url": loja.url}
@@ -176,10 +178,11 @@ def save_config(payload: ConfigPayload, db: Session = Depends(get_db)):
 
 @app.post("/admin/create-page")
 def manual_create_page(payload: ConfigPayload, db: Session = Depends(get_db)):
-    """Rota para criar a página manualmente pelo botão do Dashboard"""
     loja = db.query(Loja).filter(Loja.store_id == payload.store_id).first()
     if not loja: return JSONResponse(status_code=400, content={"error": "Loja não encontrada"})
     
+    # O token no banco já está encriptado, passamos ele direto
+    # A função create_landing_page_internal vai decriptar
     create_landing_page_internal(payload.store_id, loja.access_token, payload.theme_color)
     return {"status": "success", "url": f"{loja.url}/pages/app" if loja.url else "Verifique na loja"}
 
@@ -191,22 +194,16 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     icon = config.logo_url if config and config.logo_url else "https://via.placeholder.com/512"
 
     manifest = {
-        "name": name,
-        "short_name": name,
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#ffffff",
-        "theme_color": color,
-        "orientation": "portrait",
+        "name": name, "short_name": name, "start_url": "/", "display": "standalone",
+        "background_color": "#ffffff", "theme_color": color, "orientation": "portrait",
         "icons": [{"src": icon, "sizes": "512x512", "type": "image/png"}]
     }
     return JSONResponse(content=manifest)
 
-# --- NOVAS ROTAS DE ESTATÍSTICAS ---
+# --- ESTATÍSTICAS ---
 
 @app.post("/stats/venda")
 def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
-    """Salva uma venda realizada via App"""
     nova_venda = VendaApp(
         store_id=payload.store_id, 
         valor=payload.valor,
@@ -214,17 +211,15 @@ def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
     )
     db.add(nova_venda)
     db.commit()
-    print(f"💰 Venda registrada: R$ {payload.valor} na loja {payload.store_id}")
     return {"status": "registrado"}
 
 @app.get("/stats/total-vendas/{store_id}")
 def get_total_vendas(store_id: str, db: Session = Depends(get_db)):
-    """Retorna o total vendido para o Dashboard"""
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total = sum([float(v.valor) for v in vendas])
     return {"total": total, "quantidade": len(vendas)}
 
-# --- O SCRIPT MÁGICO (ATUALIZADO) ---
+# --- LOADER JS ---
 
 @app.get("/loader.js")
 def get_loader_script(store_id: str, db: Session = Depends(get_db)):
@@ -236,140 +231,48 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
     
     js_code = f"""
     (function() {{
-        console.log("🚀 App Builder: Iniciando...");
-
-        // 1. Detecta se já é App
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        var link = document.createElement('link'); link.rel = 'manifest'; link.href = '{BACKEND_URL}/manifest/{store_id}.json'; document.head.appendChild(link);
+        var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
 
-        // 2. Injeta Meta Tags (Manifesto e Cor)
-        var link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = '{BACKEND_URL}/manifest/{store_id}.json';
-        document.head.appendChild(link);
-        
-        var meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        meta.content = '{color}';
-        document.head.appendChild(meta);
-
-        // 3. Função Global de Instalação
         var deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {{
-            e.preventDefault();
-            deferredPrompt = e;
-            console.log("📱 Android pronto para instalar");
-        }});
-
+        window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); deferredPrompt = e; }});
         window.installPWA = function() {{
-            if (deferredPrompt) {{
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {{
-                    deferredPrompt = null;
-                }});
-            }} else {{
-                alert("Para instalar:\\n1. Toque no botão de Compartilhar (quadrado com seta)\\n2. Selecione 'Adicionar à Tela de Início' ➕");
-            }}
+            if (deferredPrompt) {{ deferredPrompt.prompt(); deferredPrompt.userChoice.then((res) => {{ deferredPrompt = null; }}); }} 
+            else {{ alert("Para instalar:\\n1. Toque em Compartilhar/Menu\\n2. Adicionar à Tela de Início ➕"); }}
         }};
 
-        // 4. Lógica Visual (Só para celulares)
         if (window.innerWidth < 900) {{
-            
-            // Smart Banner no Topo
-            var hasClosedBanner = localStorage.getItem('pwa_banner_closed');
-            if (!isApp && !hasClosedBanner) {{
-                var banner = document.createElement('div');
-                banner.style.cssText = "position: relative; width: 100%; background: #f0f0f0; padding: 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ccc; font-family: sans-serif; z-index: 99999;";
-                banner.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="font-size:24px;">📲</span>
-                        <div>
-                            <div style="font-weight:bold; font-size:12px; color:#333;">Baixe nosso App Oficial</div>
-                            <div style="font-size:10px; color:#666;">Mais rápido e seguro</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <button onclick="window.installPWA()" style="background:{color}; color:white; border:none; padding:5px 12px; border-radius:20px; font-size:11px; font-weight:bold; cursor:pointer;">BAIXAR</button>
-                        <div onclick="this.parentElement.parentElement.remove(); localStorage.setItem('pwa_banner_closed', 'true');" style="font-size:16px; color:#999; padding:5px; cursor:pointer;">✕</div>
-                    </div>
-                `;
-                document.body.insertBefore(banner, document.body.firstChild);
+            var hasClosed = localStorage.getItem('pwa_banner_closed');
+            if (!isApp && !hasClosed) {{
+                var b = document.createElement('div');
+                b.style.cssText = "position:relative;width:100%;background:#f0f0f0;padding:10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ccc;z-index:99999;";
+                b.innerHTML = `<div style='display:flex;align-items:center;gap:10px;'><span style='font-size:24px'>📲</span><div><div style='font-weight:bold;font-size:12px;color:#333'>Baixe o App</div><div style='font-size:10px;color:#666'>Mais rápido</div></div></div><div style='display:flex;gap:10px'><button onclick='window.installPWA()' style='background:{color};color:white;border:none;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:bold'>BAIXAR</button><div onclick='this.parentElement.parentElement.remove();localStorage.setItem("pwa_banner_closed","true")' style='padding:5px;color:#999'>✕</div></div>`;
+                document.body.insertBefore(b, document.body.firstChild);
             }}
 
-            // Barra Inferior Fixa
             document.body.style.paddingBottom = "80px";
             var nav = document.createElement('div');
-            nav.id = "app-pwa-bar";
-            nav.style.cssText = "position:fixed; bottom:0; left:0; width:100%; height:65px; background:white; border-top:1px solid #eee; display:flex; justify-content:space-around; align-items:center; z-index:2147483647; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);";
-            
-            var installBtnHtml = '';
-            if (!isApp) {{
-                installBtnHtml = `
-                <div onclick="window.installPWA()" style="flex:1;text-align:center;color:{color};cursor:pointer;background:#f5f5f5;border-radius:8px;margin:4px;padding:4px;">
-                    <div style="font-size:20px;">⬇️</div>
-                    <div style="font-size:9px;font-weight:bold;">Baixar</div>
-                </div>`;
-            }}
-
-            nav.innerHTML = `
-                <div onclick="window.location='/'" style="flex:1;text-align:center;color:{color};cursor:pointer;">
-                   <div style="font-size:22px;">🏠</div>
-                   <div style="font-size:10px;">Início</div>
-                </div>
-                <div onclick="window.location='/search'" style="flex:1;text-align:center;color:#666;cursor:pointer;">
-                   <div style="font-size:22px;">🔍</div>
-                   <div style="font-size:10px;">Buscar</div>
-                </div>
-                <div onclick="window.location='/checkout'" style="flex:1;text-align:center;color:#666;cursor:pointer;">
-                    <div style="font-size:22px;">🛒</div>
-                    <div style="font-size:10px;">Carrinho</div>
-                </div>
-                ${{installBtnHtml}}
-            `;
+            nav.style.cssText = "position:fixed;bottom:0;left:0;width:100%;height:65px;background:white;border-top:1px solid #eee;display:flex;justify-content:space-around;align-items:center;z-index:999999;box-shadow:0 -2px 10px rgba(0,0,0,0.05);";
+            var installBtn = !isApp ? `<div onclick="window.installPWA()" style="flex:1;text-align:center;color:{color};background:#f5f5f5;border-radius:8px;margin:4px;padding:4px"><div style="font-size:20px">⬇️</div><div style="font-size:9px;font-weight:bold">Baixar</div></div>` : '';
+            nav.innerHTML = `<div onclick="window.location='/'" style="flex:1;text-align:center;color:{color}"><div style="font-size:22px">🏠</div><div style="font-size:10px">Início</div></div><div onclick="window.location='/search'" style="flex:1;text-align:center;color:#666"><div style="font-size:22px">🔍</div><div style="font-size:10px">Buscar</div></div><div onclick="window.location='/checkout'" style="flex:1;text-align:center;color:#666"><div style="font-size:22px">🛒</div><div style="font-size:10px">Carrinho</div></div>${{installBtn}}`;
             document.body.appendChild(nav);
         }}
 
-        // 5. RASTREADOR DE VENDAS (NOVO)
-        // Só registra se estiver na página de Sucesso e for App
         if (window.location.href.includes('/checkout/success') && isApp) {{
-            
-            var valorVenda = "0.00";
-            
-            // Tenta pegar do DataLayer (Padrão Nuvemshop/Analytics)
-            if (window.dataLayer) {{
-                for (var i = 0; i < window.dataLayer.length; i++) {{
-                    var data = window.dataLayer[i];
-                    if (data.transactionTotal) {{
-                        valorVenda = data.transactionTotal;
-                        break;
-                    }}
-                }}
-            }}
-
-            var orderId = window.location.href.split('/').pop(); 
-            var jaRegistrou = localStorage.getItem('venda_registrada_' + orderId);
-
-            if (!jaRegistrou && parseFloat(valorVenda) > 0) {{
-                console.log("💰 Venda via App detectada: R$ " + valorVenda);
-                
-                // Envia para o Backend
-                fetch('{BACKEND_URL}/stats/venda', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{
-                        store_id: '{store_id}',
-                        valor: valorVenda.toString()
-                    }})
-                }});
-
-                localStorage.setItem('venda_registrada_' + orderId, 'true');
+            var val = "0.00";
+            if (window.dataLayer) {{ for(var i=0;i<window.dataLayer.length;i++){{ if(window.dataLayer[i].transactionTotal){{ val=window.dataLayer[i].transactionTotal; break; }} }} }}
+            var oid = window.location.href.split('/').pop();
+            if (!localStorage.getItem('venda_'+oid) && parseFloat(val)>0) {{
+                fetch('{BACKEND_URL}/stats/venda', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{store_id:'{store_id}', valor:val.toString()}}) }});
+                localStorage.setItem('venda_'+oid, 'true');
             }}
         }}
-
     }})();
     """
     return Response(content=js_code, media_type="application/javascript")
 
-# --- INSTALAÇÃO E AUTH ---
+# --- AUTH & CALLBACK (AGORA ENCRIPTANDO) ---
 
 @app.get("/install")
 def install():
@@ -390,7 +293,10 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
 
     data = res.json()
     store_id = str(data["user_id"])
-    access_token = data["access_token"]
+    access_token = data["access_token"] # Token Puro
+
+    # 1. ENCRIPTA O TOKEN ANTES DE SALVAR (Segurança)
+    encrypted_token = encrypt_token(access_token)
 
     try:
         headers = { "Authentication": f"bearer {access_token}", "User-Agent": "App PWA Builder" }
@@ -401,15 +307,17 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
     
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
     if not loja: 
-        loja = Loja(store_id=store_id, access_token=access_token, url=store_url)
+        # Salva o Token ENCRIPTADO no banco
+        loja = Loja(store_id=store_id, access_token=encrypted_token, url=store_url)
         db.add(loja)
     else: 
-        loja.access_token = access_token
+        # Atualiza com o Token ENCRIPTADO
+        loja.access_token = encrypted_token
         loja.url = store_url
     db.commit()
 
-    # Automação Total
-    inject_script_tag(store_id, access_token)
-    create_landing_page_internal(store_id, access_token)
+    # Passa o token já encriptado (as funções internas sabem decriptar)
+    inject_script_tag(store_id, encrypted_token)
+    create_landing_page_internal(store_id, encrypted_token)
     
     return RedirectResponse(url=f"{FRONTEND_URL}/admin?store_id={store_id}")
