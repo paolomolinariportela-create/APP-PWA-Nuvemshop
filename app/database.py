@@ -1,23 +1,22 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
 
-# Configuração inteligente: Se estiver no Railway, usa Postgres. Se local, usa SQLite.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_test.db")
+# Pega a URL do banco do Railway
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if DATABASE_URL.startswith("postgres://"):
+# --- CORREÇÃO IMPORTANTE PARA O RAILWAY ---
+# O Railway fornece "postgres://", mas o Python novo exige "postgresql://"
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-if "sqlite" in DATABASE_URL:
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    # Pool de conexões para aguentar múltiplas lojas
-    engine = create_engine(DATABASE_URL, pool_size=20, max_overflow=10)
-
+# Cria a conexão
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Dependência para pegar o banco
 def get_db():
     db = SessionLocal()
     try:
