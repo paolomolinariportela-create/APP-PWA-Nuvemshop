@@ -139,31 +139,49 @@ def get_stats(store_id: str = Depends(get_current_store), db: Session = Depends(
 # --- NOVO ENDPOINT DO DASHBOARD COMPLETO ---
 @app.get("/stats/dashboard")
 def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
-    # 1. Dados Reais de Venda (Do Banco)
+    # 1. Dados Reais de Venda
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
 
-    # 2. Dados Simulados (Futuramente pegaremos da API da Nuvemshop)
-    # Estamos colocando valores fixos para você ver o layout funcionando lindo!
+    # 2. Dados Completos (Simulados para Visualização)
     stats = {
+        # KPI Principais
         "receita": total_receita,
         "vendas": qtd_vendas,
-        "instalacoes": 124, # Exemplo
-        "carrinhos_abandonados": {
-            "valor": 4250.00,
-            "qtd": 15
+        "instalacoes": 124, 
+        "carrinhos_abandonados": { "valor": 4250.00, "qtd": 15 },
+        "economia_ads": 200.00,
+        
+        # Card 1: Visualizações
+        "visualizacoes": {
+            "pageviews": 15430,
+            "tempo_medio": "4m 12s",
+            "top_paginas": ["Home", "Promoções", "Tênis Runner"]
         },
-        "taxa_conversao": {
-            "app": 2.5,   # 2.5%
-            "site": 0.8   # 0.8%
+
+        # Card 2: Funil de Vendas
+        "funil": {
+            "visitas": 1000,
+            "carrinho": 320,  # 32%
+            "checkout": 110   # 11%
         },
-        "economia_ads": 200.00, # R$ 200 economizados
-        "top_produtos": [
-            {"nome": "Camiseta Básica", "vendas": 45},
-            {"nome": "Calça Jeans", "vendas": 28},
-            {"nome": "Tênis Urban", "vendas": 12}
-        ]
+
+        # Card 3: Recorrência
+        "recorrencia": {
+            "clientes_2x": 45,
+            "taxa_recompra": 18.5
+        },
+
+        # Card 4: Ticket Médio (Comparativo)
+        "ticket_medio": {
+            "app": 189.90,
+            "site": 142.50
+        },
+
+        # Card Antigo: Taxa de Conversão
+        "taxa_conversao": { "app": 2.5, "site": 0.8 },
+        "top_produtos": []
     }
     return stats
 
