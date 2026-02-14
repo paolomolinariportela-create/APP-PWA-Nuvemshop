@@ -11,7 +11,7 @@ from typing import Optional
 
 # Importando nossos novos módulos organizados
 from .database import engine, Base, get_db
-from .models import Loja, AppConfig, VendaApp
+from .models import Loja, AppConfig, VendaApp, VisitaApp
 from .auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token, get_current_store
 from .services import inject_script_tag, create_landing_page_internal
 
