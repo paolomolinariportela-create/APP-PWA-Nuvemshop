@@ -190,6 +190,19 @@ def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session 
     }
     return stats
 
+# 3. Crie essa rota (pode ser perto da rota de vendas)
+@app.post("/stats/visita")
+def registrar_visita(payload: VisitaPayload, db: Session = Depends(get_db)):
+    # Registra que alguém acessou uma página
+    db.add(VisitaApp(
+        store_id=payload.store_id, 
+        pagina=payload.pagina, 
+        is_pwa=payload.is_pwa,
+        data=datetime.now().isoformat()
+    ))
+    db.commit()
+    return {"status": "ok"}
+
 # --- ROTAS PÚBLICAS (SCRIPT E MANIFESTO) ---
 
 @app.get("/")
