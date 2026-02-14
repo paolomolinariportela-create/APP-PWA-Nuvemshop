@@ -136,6 +136,37 @@ def get_stats(store_id: str = Depends(get_current_store), db: Session = Depends(
     total = sum([float(v.valor) for v in vendas])
     return {"total": total, "quantidade": len(vendas)}
 
+# --- NOVO ENDPOINT DO DASHBOARD COMPLETO ---
+@app.get("/stats/dashboard")
+def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+    # 1. Dados Reais de Venda (Do Banco)
+    vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
+    total_receita = sum([float(v.valor) for v in vendas])
+    qtd_vendas = len(vendas)
+
+    # 2. Dados Simulados (Futuramente pegaremos da API da Nuvemshop)
+    # Estamos colocando valores fixos para você ver o layout funcionando lindo!
+    stats = {
+        "receita": total_receita,
+        "vendas": qtd_vendas,
+        "instalacoes": 124, # Exemplo
+        "carrinhos_abandonados": {
+            "valor": 4250.00,
+            "qtd": 15
+        },
+        "taxa_conversao": {
+            "app": 2.5,   # 2.5%
+            "site": 0.8   # 0.8%
+        },
+        "economia_ads": 200.00, # R$ 200 economizados
+        "top_produtos": [
+            {"nome": "Camiseta Básica", "vendas": 45},
+            {"nome": "Calça Jeans", "vendas": 28},
+            {"nome": "Tênis Urban", "vendas": 12}
+        ]
+    }
+    return stats
+
 # --- ROTAS PÚBLICAS (SCRIPT E MANIFESTO) ---
 
 @app.get("/")
