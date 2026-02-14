@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean
 from .database import Base
 
 # Tabela de Lojas (Login e Token)
@@ -29,6 +29,7 @@ class VendaApp(Base):
     store_id = Column(String, index=True)
     valor = Column(String) # Ex: "150.00"
     data = Column(String)  # Data da venda
+    visitor_id = Column(String, index=True, nullable=True) # <--- NOVO: Identidade do comprador (para recorrência)
 
 class VisitaApp(Base):
     __tablename__ = "visitas_app"
@@ -38,3 +39,4 @@ class VisitaApp(Base):
     data = Column(String) # Vamos guardar ISO format
     pagina = Column(String) # Ex: "/" ou "/produto-x"
     is_pwa = Column(Boolean, default=False) # Se está acessando pelo App ou Site
+    visitor_id = Column(String, index=True, nullable=True) # <--- NOVO: Identidade do visitante (para funil)
