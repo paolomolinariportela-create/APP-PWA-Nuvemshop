@@ -11,6 +11,7 @@ httpx
 pydantic
 PyJWT
 cryptography
+python-jose[cryptography]
 
 
 
