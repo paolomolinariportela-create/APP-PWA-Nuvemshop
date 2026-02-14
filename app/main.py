@@ -1,16 +1,16 @@
-# main.py
 import os
 import requests
-from datetime import datetime
-from fastapi import FastAPI, Depends, Response, Query
+from datetime import datetime, timedelta
+from fastapi import FastAPI, Depends, Response, Query, HTTPException, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 
-# Importando nossos novos módulos organizados
+# Importando nossos módulos
 from .database import engine, Base, get_db
+# ADICIONADO: VisitaApp nos imports
 from .models import Loja, AppConfig, VendaApp, VisitaApp
 from .auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token, get_current_store
 from .services import inject_script_tag, create_landing_page_internal
@@ -56,7 +56,6 @@ def install():
     auth_url = f"https://www.nuvemshop.com.br/apps/authorize/?client_id={CLIENT_ID}&response_type=code&scope=read_products,write_scripts,write_content"
     return RedirectResponse(auth_url, status_code=303)
 
-# Callback aceita POST e GET para evitar erro 405
 @app.api_route("/callback", methods=["GET", "POST"])
 def callback(code: str = Query(None), db: Session = Depends(get_db)):
     if not code: return RedirectResponse(FRONTEND_URL)
@@ -141,7 +140,7 @@ def get_stats(store_id: str = Depends(get_current_store), db: Session = Depends(
     total = sum([float(v.valor) for v in vendas])
     return {"total": total, "quantidade": len(vendas)}
 
-# --- NOVO ENDPOINT DO DASHBOARD COMPLETO ---
+# --- ENDPOINT DO DASHBOARD COMPLETO (ATUALIZADO) ---
 @app.get("/stats/dashboard")
 def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
     # 1. Dados Reais de Venda
@@ -149,48 +148,38 @@ def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session 
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
 
-    # 2. Dados Completos (Simulados para Visualização)
+    # 2. Dados Simulados para o Dashboard ficar Bonito (Futuramente calcularemos real)
     stats = {
-        # KPI Principais
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": 124, 
         "carrinhos_abandonados": { "valor": 4250.00, "qtd": 15 },
         "economia_ads": 200.00,
         
-        # Card 1: Visualizações
         "visualizacoes": {
             "pageviews": 15430,
             "tempo_medio": "4m 12s",
             "top_paginas": ["Home", "Promoções", "Tênis Runner"]
         },
-
-        # Card 2: Funil de Vendas
         "funil": {
             "visitas": 1000,
-            "carrinho": 320,  # 32%
-            "checkout": 110   # 11%
+            "carrinho": 320,
+            "checkout": 110
         },
-
-        # Card 3: Recorrência
         "recorrencia": {
             "clientes_2x": 45,
             "taxa_recompra": 18.5
         },
-
-        # Card 4: Ticket Médio (Comparativo)
         "ticket_medio": {
             "app": 189.90,
             "site": 142.50
         },
-
-        # Card Antigo: Taxa de Conversão
         "taxa_conversao": { "app": 2.5, "site": 0.8 },
         "top_produtos": []
     }
     return stats
 
-# 3. Crie essa rota (pode ser perto da rota de vendas)
+# --- ROTA DE RASTREAMENTO (O OUVIDO DO SISTEMA) ---
 @app.post("/stats/visita")
 def registrar_visita(payload: VisitaPayload, db: Session = Depends(get_db)):
     # Registra que alguém acessou uma página
@@ -202,6 +191,7 @@ def registrar_visita(payload: VisitaPayload, db: Session = Depends(get_db)):
     ))
     db.commit()
     return {"status": "ok"}
+
 
 # --- ROTAS PÚBLICAS (SCRIPT E MANIFESTO) ---
 
@@ -233,6 +223,7 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
     except: config = None
     color = config.theme_color if config else "#000000"
 
+    # --- O JAVASCRIPT ESPIÃO (ATUALIZADO) ---
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Ativo");
@@ -241,6 +232,35 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
         // 1. Manifesto e Meta Tags
         var link = document.createElement('link'); link.rel = 'manifest'; link.href = '{BACKEND_URL}/manifest/{store_id}.json'; document.head.appendChild(link);
         var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
+
+        // --- RASTREAMENTO DE VISITAS (NOVO) ---
+        function trackVisit() {{
+            try {{
+                // Envia dados para a nova rota /stats/visita
+                fetch('{BACKEND_URL}/stats/visita', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        store_id: '{store_id}',
+                        pagina: window.location.pathname,
+                        is_pwa: isApp
+                    }})
+                }});
+            }} catch(e) {{ console.log('Erro tracking', e); }}
+        }}
+        
+        // Dispara no carregamento inicial
+        trackVisit();
+        
+        // Dispara se a URL mudar (Nuvemshop usa SPA)
+        var oldHref = document.location.href;
+        new MutationObserver(function() {{
+            if (oldHref !== document.location.href) {{
+                oldHref = document.location.href;
+                trackVisit();
+            }}
+        }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
+        // --------------------------------------
 
         // 2. Lógica de Instalação
         var deferredPrompt;
