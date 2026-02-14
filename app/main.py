@@ -268,7 +268,7 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
 def install():
     # 303 força o navegador a ir para a próxima página limpo
     return RedirectResponse(
-        f"https://www.tiendanube.com/apps/authorize/?client_id={CLIENT_ID}&response_type=code&scope=read_products,write_scripts,write_content",
+        f"https://www.nuvemshop.com.br/apps/authorize/?client_id={CLIENT_ID}&response_type=code&scope=read_products,write_scripts,write_content",
         status_code=303
     )
 
