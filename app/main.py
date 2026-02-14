@@ -42,7 +42,12 @@ class ConfigPayload(BaseModel):
 class VendaPayload(BaseModel):
     store_id: str
     valor: str
-
+    
+class VisitaPayload(BaseModel):
+    store_id: str
+    pagina: str
+    is_pwa: bool
+    
 # --- ROTAS DE AUTENTICAÇÃO (LOGIN) ---
 
 @app.get("/install")
