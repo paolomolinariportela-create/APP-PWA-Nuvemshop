@@ -13,8 +13,8 @@ from .database import engine, Base, get_db
 from .models import Loja, AppConfig, VendaApp
 
 # --- INICIALIZAÇÃO DO BANCO ---
+Base.metadata.drop_all(bind=engine) 
 Base.metadata.create_all(bind=engine)
-app = FastAPI()
 
 # --- VARIÁVEIS DE AMBIENTE ---
 CLIENT_ID = os.getenv("CLIENT_ID")
