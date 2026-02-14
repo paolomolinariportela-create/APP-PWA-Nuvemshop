@@ -1,5 +1,6 @@
 import os
 import requests
+from datetime import datetime
 from fastapi import FastAPI, Depends, Response, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +9,8 @@ from pydantic import BaseModel
 from typing import Optional
 
 from .database import engine, Base, get_db
-from .models import Loja, AppConfig
+# ADICIONADO: Importando VendaApp
+from .models import Loja, AppConfig, VendaApp
 
 # --- INICIALIZAÇÃO DO BANCO ---
 Base.metadata.create_all(bind=engine)
@@ -45,6 +47,11 @@ class ConfigPayload(BaseModel):
     logo_url: Optional[str] = None
     whatsapp: Optional[str] = None
 
+# ADICIONADO: Modelo para receber a venda
+class VendaPayload(BaseModel):
+    store_id: str
+    valor: str
+
 # --- FUNÇÕES AUXILIARES ---
 
 def inject_script_tag(store_id: str, access_token: str):
@@ -62,7 +69,7 @@ def inject_script_tag(store_id: str, access_token: str):
             "name": "PWA Loader",
             "description": "Transforma a loja em App",
             "html": f"<script src='{script_url}' async></script>",
-            "event": "onload", # Tenta onload, se a loja bloquear, vai onfirstinteraction manual
+            "event": "onload", # Tenta onload
             "where": "store"
         }
 
@@ -122,7 +129,7 @@ def create_landing_page_internal(store_id, access_token, color="#000000"):
             "title": "Baixe nosso App", 
             "body": html_body, 
             "published": True, 
-            "handle": "app" # Tenta criar link /pages/app
+            "handle": "app" 
         }
         
         res = requests.post(url, json=data, headers=headers)
@@ -195,16 +202,38 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     }
     return JSONResponse(content=manifest)
 
+# --- NOVAS ROTAS DE ESTATÍSTICAS ---
+
+@app.post("/stats/venda")
+def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
+    """Salva uma venda realizada via App"""
+    nova_venda = VendaApp(
+        store_id=payload.store_id, 
+        valor=payload.valor,
+        data=datetime.now().isoformat()
+    )
+    db.add(nova_venda)
+    db.commit()
+    print(f"💰 Venda registrada: R$ {payload.valor} na loja {payload.store_id}")
+    return {"status": "registrado"}
+
+@app.get("/stats/total-vendas/{store_id}")
+def get_total_vendas(store_id: str, db: Session = Depends(get_db)):
+    """Retorna o total vendido para o Dashboard"""
+    vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
+    total = sum([float(v.valor) for v in vendas])
+    return {"total": total, "quantidade": len(vendas)}
+
+# --- O SCRIPT MÁGICO (ATUALIZADO) ---
+
 @app.get("/loader.js")
 def get_loader_script(store_id: str, db: Session = Depends(get_db)):
-    # Recupera configuração ou usa padrão
     try:
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
         color = config.theme_color if config else "#000000"
     except:
         color = "#000000"
     
-    # --- O SCRIPT MÁGICO (Javascript Gerado) ---
     js_code = f"""
     (function() {{
         console.log("🚀 App Builder: Iniciando...");
@@ -223,7 +252,7 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
         meta.content = '{color}';
         document.head.appendChild(meta);
 
-        // 3. Função Global de Instalação (Pode ser chamada por botões da loja)
+        // 3. Função Global de Instalação
         var deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {{
             e.preventDefault();
@@ -233,13 +262,11 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
 
         window.installPWA = function() {{
             if (deferredPrompt) {{
-                // Android
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then((choiceResult) => {{
                     deferredPrompt = null;
                 }});
             }} else {{
-                // iOS / Outros
                 alert("Para instalar:\\n1. Toque no botão de Compartilhar (quadrado com seta)\\n2. Selecione 'Adicionar à Tela de Início' ➕");
             }}
         }};
@@ -247,7 +274,7 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
         // 4. Lógica Visual (Só para celulares)
         if (window.innerWidth < 900) {{
             
-            // A) Smart Banner no Topo (Se não for app e não tiver fechado antes)
+            // Smart Banner no Topo
             var hasClosedBanner = localStorage.getItem('pwa_banner_closed');
             if (!isApp && !hasClosedBanner) {{
                 var banner = document.createElement('div');
@@ -268,13 +295,12 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
                 document.body.insertBefore(banner, document.body.firstChild);
             }}
 
-            // B) Barra Inferior Fixa
+            // Barra Inferior Fixa
             document.body.style.paddingBottom = "80px";
             var nav = document.createElement('div');
             nav.id = "app-pwa-bar";
             nav.style.cssText = "position:fixed; bottom:0; left:0; width:100%; height:65px; background:white; border-top:1px solid #eee; display:flex; justify-content:space-around; align-items:center; z-index:2147483647; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);";
             
-            // Botão de Instalar (Só aparece se NÃO for app)
             var installBtnHtml = '';
             if (!isApp) {{
                 installBtnHtml = `
@@ -301,6 +327,44 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
             `;
             document.body.appendChild(nav);
         }}
+
+        // 5. RASTREADOR DE VENDAS (NOVO)
+        // Só registra se estiver na página de Sucesso e for App
+        if (window.location.href.includes('/checkout/success') && isApp) {{
+            
+            var valorVenda = "0.00";
+            
+            // Tenta pegar do DataLayer (Padrão Nuvemshop/Analytics)
+            if (window.dataLayer) {{
+                for (var i = 0; i < window.dataLayer.length; i++) {{
+                    var data = window.dataLayer[i];
+                    if (data.transactionTotal) {{
+                        valorVenda = data.transactionTotal;
+                        break;
+                    }}
+                }}
+            }}
+
+            var orderId = window.location.href.split('/').pop(); 
+            var jaRegistrou = localStorage.getItem('venda_registrada_' + orderId);
+
+            if (!jaRegistrou && parseFloat(valorVenda) > 0) {{
+                console.log("💰 Venda via App detectada: R$ " + valorVenda);
+                
+                // Envia para o Backend
+                fetch('{BACKEND_URL}/stats/venda', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{
+                        store_id: '{store_id}',
+                        valor: valorVenda.toString()
+                    }})
+                }});
+
+                localStorage.setItem('venda_registrada_' + orderId, 'true');
+            }}
+        }}
+
     }})();
     """
     return Response(content=js_code, media_type="application/javascript")
@@ -328,7 +392,6 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
     store_id = str(data["user_id"])
     access_token = data["access_token"]
 
-    # 1. Pega URL da Loja para salvar
     try:
         headers = { "Authentication": f"bearer {access_token}", "User-Agent": "App PWA Builder" }
         store_info = requests.get(f"https://api.tiendanube.com/v1/{store_id}/store", headers=headers).json()
@@ -336,10 +399,8 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
     except:
         store_url = ""
     
-    # 2. Salva no Banco (Com URL)
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
     if not loja: 
-        # Certifique-se que o models.py tem o campo 'url'
         loja = Loja(store_id=store_id, access_token=access_token, url=store_url)
         db.add(loja)
     else: 
@@ -347,9 +408,8 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
         loja.url = store_url
     db.commit()
 
-    # 3. Automação: Injeta Script e Cria Página
+    # Automação Total
     inject_script_tag(store_id, access_token)
     create_landing_page_internal(store_id, access_token)
     
-    # 4. Vai pro Painel
     return RedirectResponse(url=f"{FRONTEND_URL}/admin?store_id={store_id}")
