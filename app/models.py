@@ -21,3 +21,11 @@ class AppConfig(Base):
     theme_color = Column(String, default="#000000")
     logo_url = Column(String, nullable=True)
     whatsapp_number = Column(String, nullable=True)
+    
+class VendaApp(Base):
+    __tablename__ = "vendas_app"
+
+    id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(String, index=True)
+    valor = Column(String) # Ex: "150.00"
+    data = Column(String)  # Data da venda
