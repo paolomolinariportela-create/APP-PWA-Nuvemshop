@@ -9,6 +9,7 @@ class Loja(Base):
     store_id = Column(String, unique=True, index=True)
     access_token = Column(String)
     email = Column(String, nullable=True)
+    url = Column(String, nullable=True)
 
 # Tabela de Configuração (Cores e Nome do App)
 class AppConfig(Base):
