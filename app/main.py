@@ -17,8 +17,15 @@ app = FastAPI()
 # --- VARIÁVEIS DE AMBIENTE ---
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-BACKEND_URL = os.getenv("PUBLIC_URL") 
-FRONTEND_URL = os.getenv("FRONTEND_URL") 
+# Pega a URL pública fornecida pelo Railway automaticamente se não estiver setada
+BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if BACKEND_URL and not BACKEND_URL.startswith("http"):
+    BACKEND_URL = f"https://{BACKEND_URL}"
+
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+# CORREÇÃO 1: Garante que o link do front tenha https
+if FRONTEND_URL and not FRONTEND_URL.startswith("http"):
+    FRONTEND_URL = f"https://{FRONTEND_URL}"
 
 # --- CORS ---
 app.add_middleware(
@@ -38,44 +45,45 @@ class ConfigPayload(BaseModel):
 
 # --- FUNÇÃO MÁGICA: INJEÇÃO AUTOMÁTICA ---
 def inject_script_tag(store_id: str, access_token: str):
-    """
-    Fala com a API da Nuvemshop e insere o script do PWA automaticamente.
-    """
-    url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
-    headers = {
-        "Authentication": f"bearer {access_token}",
-        "User-Agent": "App PWA Builder (suporte@seumail.com)" 
-    }
-    
-    # O Script que vamos injetar
-    script_url = f"{BACKEND_URL}/loader.js?store_id={store_id}"
-    
-    payload = {
-        "name": "PWA Loader",
-        "description": "Transforma a loja em App",
-        "html": f"<script src='{script_url}' async></script>",
-        "event": "onload",
-        "where": "store"
-    }
+    try:
+        url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
+        headers = {
+            "Authentication": f"bearer {access_token}",
+            "User-Agent": "App PWA Builder" 
+        }
+        
+        script_url = f"{BACKEND_URL}/loader.js?store_id={store_id}"
+        
+        payload = {
+            "name": "PWA Loader",
+            "description": "Transforma a loja em App",
+            "html": f"<script src='{script_url}' async></script>",
+            "event": "onload",
+            "where": "store"
+        }
 
-    # Verifica se já existe para não duplicar
-    check = requests.get(url, headers=headers)
-    if check.status_code == 200:
-        scripts = check.json()
-        for script in scripts:
-            if "PWA Loader" in script.get("name", ""):
-                # Já existe, então vamos atualizar (PUT) ou ignorar
-                print(f"Script já existe na loja {store_id}")
-                return
+        # Verifica se já existe
+        check = requests.get(url, headers=headers)
+        if check.status_code == 200:
+            scripts = check.json()
+            # Proteção contra resposta inesperada da API
+            if isinstance(scripts, list):
+                for script in scripts:
+                    if "PWA Loader" in script.get("name", ""):
+                        print(f"Script já existe na loja {store_id}")
+                        return
 
-    # Se não existe, cria (POST)
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 201:
-        print(f"✅ Script injetado com sucesso na loja {store_id}")
-    else:
-        print(f"❌ Erro ao injetar script: {response.text}")
+        # Cria (POST)
+        requests.post(url, json=payload, headers=headers)
+    except Exception as e:
+        # CORREÇÃO 2: Se der erro aqui, apenas loga e segue a vida
+        print(f"Aviso: Injeção automática falhou (provavelmente já existe manual): {e}")
 
 # --- ROTAS ---
+
+@app.get("/")
+def home():
+    return {"status": "Backend Online", "frontend": FRONTEND_URL}
 
 @app.get("/admin/config/{store_id}")
 def get_config(store_id: str, db: Session = Depends(get_db)):
@@ -123,7 +131,6 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
     
     js_code = f"""
     (function() {{
-        // Evita rodar dentro de iFrames (como o editor da Nuvemshop)
         if (window.self !== window.top) return;
 
         var link = document.createElement('link');
@@ -157,11 +164,8 @@ def get_loader_script(store_id: str, db: Session = Depends(get_db)):
     """
     return Response(content=js_code, media_type="application/javascript")
 
-# --- INSTALAÇÃO E OAUTH ---
-
 @app.get("/install")
 def install():
-    # Adicionei o escopo 'write_scripts' que é OBRIGATÓRIO para injetar código
     return RedirectResponse(
         f"https://www.tiendanube.com/apps/authorize/?client_id={CLIENT_ID}&response_type=code&scope=read_products,write_scripts"
     )
@@ -181,17 +185,14 @@ def callback(code: str = Query(...), db: Session = Depends(get_db)):
     store_id = str(data["user_id"])
     access_token = data["access_token"]
     
-    # 1. Salva no Banco
+    # 1. Salva/Atualiza Loja
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
     if not loja: db.add(Loja(store_id=store_id, access_token=access_token))
     else: loja.access_token = access_token
     db.commit()
 
-    # 2. INJEÇÃO AUTOMÁTICA (A Mágica acontece aqui)
-    try:
-        inject_script_tag(store_id, access_token)
-    except Exception as e:
-        print(f"Erro na injeção automática: {e}")
+    # 2. Tenta Injetar (mas não trava se der erro)
+    inject_script_tag(store_id, access_token)
     
-    # 3. Manda pro Painel
+    # 3. Redireciona
     return RedirectResponse(url=f"{FRONTEND_URL}/admin?store_id={store_id}")
