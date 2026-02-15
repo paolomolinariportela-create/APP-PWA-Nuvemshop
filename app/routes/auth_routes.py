@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from cryptography.fernet import Fernet # Para criptografar o token (se usado)
+from app.auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token
 
 # --- IMPORTS INTERNOS ---
 from app.database import get_db
