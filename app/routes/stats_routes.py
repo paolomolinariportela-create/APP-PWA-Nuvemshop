@@ -8,15 +8,14 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from pywebpush import webpush, WebPushException
 
-# Importando do nível superior
-from ..database import get_db
-from ..models import VendaApp, VisitaApp, PushSubscription, AppConfig
-from ..auth import get_current_store
+# --- IMPORTS INTERNOS ---
+from app.database import get_db
+from app.models import VendaApp, VisitaApp, PushSubscription, AppConfig, PushHistory, Loja
+from app.auth import get_current_store
 
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
 # --- CONFIGURAÇÃO PUSH (VAPID) BLINDADA ---
-# Usamos valores padrão para evitar erro no Build do Railway
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
@@ -27,7 +26,7 @@ try:
 except:
     VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
 
-# URL Backend para o Loader saber onde chamar
+# URL Backend
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
 
@@ -43,13 +42,11 @@ class VisitaPayload(BaseModel):
     is_pwa: bool
     visitor_id: str
 
-# Modelo para Inscrição no Push
 class PushSubscribePayload(BaseModel):
     store_id: str
     subscription: Dict[str, Any]
     visitor_id: Optional[str] = None
 
-# Modelo para Envio de Push (Admin)
 class PushSendPayload(BaseModel):
     title: str
     message: str
@@ -103,39 +100,32 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
         """
 
     # 3. O Script Mágico Completo
-    # Injetamos a VAPID_PUBLIC_KEY aqui para o JS usar
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v3 (Push Enabled)");
         
-        // Identidade
         var visitorId = localStorage.getItem('pwa_v_id');
         if(!visitorId) {{ visitorId = 'v_' + Math.random().toString(36).substr(2, 9); localStorage.setItem('pwa_v_id', visitorId); }}
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
         
-        // Meta Tags
         var link = document.createElement('link'); link.rel = 'manifest'; link.href = '{BACKEND_URL}/manifest/{store_id}.json'; document.head.appendChild(link);
         var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
 
-        // Analytics
         function trackVisit() {{
             try {{ fetch('{BACKEND_URL}/stats/visita', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }}) }}); }} catch(e) {{}}
         }}
         trackVisit();
         
-        // Observer SPA
         var oldHref = document.location.href;
         new MutationObserver(function() {{ if (oldHref !== document.location.href) {{ oldHref = document.location.href; trackVisit(); }} }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
 
-        // Instalação PWA
         var deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); deferredPrompt = e; }});
         window.installPWA = function() {{
             if (deferredPrompt) {{ deferredPrompt.prompt(); }} 
-            else {{ alert("Para instalar:\\\\\\\\nAndroid: Menu > Adicionar à Tela\\\\\\\\niOS: Compartilhar > Adicionar à Tela"); }}
+            else {{ alert("Para instalar:\\\\\\\\\\\\\\\\nAndroid: Menu > Adicionar à Tela\\\\\\\\\\\\\\\\niOS: Compartilhar > Adicionar à Tela"); }}
         }};
 
-        // --- PUSH NOTIFICATIONS ---
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
@@ -150,17 +140,12 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
         async function subscribePush() {{
             if ('serviceWorker' in navigator && publicVapidKey) {{
                 try {{
-                    // Registra o Service Worker Global
                     const registration = await navigator.serviceWorker.register('{BACKEND_URL}/service-worker.js');
                     await navigator.serviceWorker.ready;
-
-                    // Se inscreve no Push Manager
                     const subscription = await registration.pushManager.subscribe({{
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                     }});
-
-                    // Envia token para o Backend
                     await fetch('{BACKEND_URL}/stats/push/subscribe', {{
                         method: 'POST',
                         body: JSON.stringify({{ subscription: subscription, store_id: '{store_id}', visitor_id: visitorId }}),
@@ -171,13 +156,9 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
             }}
         }}
 
-        // Tenta inscrever se for PWA ou se o usuário clicar em algo (futuro)
         if (isApp) {{ subscribePush(); }}
-
-        // Widgets
         {fab_script}
 
-        // Vendas
         if (window.location.href.includes('/checkout/success') && isApp) {{
             var val = "0.00";
             if (window.dataLayer) {{ for(var i=0; i<window.dataLayer.length; i++) {{ if(window.dataLayer[i].transactionTotal) {{ val = window.dataLayer[i].transactionTotal; break; }} }} }}
@@ -206,11 +187,10 @@ def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "ok"}
 
-# --- ROTAS DE PUSH (Subscribe & Send) ---
+# --- ROTAS DE PUSH (Subscribe & Send & History) ---
 
 @router.post("/push/subscribe")
 def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db)):
-    """Salva o token do usuário"""
     try:
         sub_data = payload.subscription
         endpoint = sub_data.get("endpoint")
@@ -237,49 +217,59 @@ def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db))
         print(f"Erro Subscribe: {e}")
         return {"status": "error"}
 
+# ROTA NOVA: LISTAR HISTÓRICO DE CAMPANHAS
+@router.get("/admin/push-history")
+def get_push_history(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+    """Retorna o histórico de campanhas enviadas"""
+    history = db.query(PushHistory).filter(PushHistory.store_id == store_id).order_by(PushHistory.id.desc()).all()
+    return history
+
 @router.post("/admin/send-push")
 def send_push_campaign(payload: PushSendPayload, store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
-    """Envia notificação para todos"""
+    """Envia notificação para todos e salva no histórico"""
     subs = db.query(PushSubscription).filter(PushSubscription.store_id == store_id).all()
-    if not subs: return {"status": "success", "sent": 0, "message": "Nenhum inscrito."}
-
+    
+    # Prepara a mensagem
     message_body = { "title": payload.title, "body": payload.message, "url": payload.url, "icon": payload.icon }
     sent_count = 0; delete_ids = []
 
-    for sub in subs:
-        res = send_webpush({"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, message_body)
-        if res == True: sent_count += 1
-        elif res == "DELETE": delete_ids.append(sub.id)
+    # Envia para cada inscrito
+    if subs:
+        for sub in subs:
+            res = send_webpush({"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, message_body)
+            if res == True: sent_count += 1
+            elif res == "DELETE": delete_ids.append(sub.id)
 
-    if delete_ids:
-        db.query(PushSubscription).filter(PushSubscription.id.in_(delete_ids)).delete(synchronize_session=False)
-        db.commit()
+        if delete_ids:
+            db.query(PushSubscription).filter(PushSubscription.id.in_(delete_ids)).delete(synchronize_session=False)
+            db.commit()
+
+    # --- SALVA NO HISTÓRICO (NOVO!) ---
+    history_item = PushHistory(
+        store_id=store_id,
+        title=payload.title,
+        message=payload.message,
+        url=payload.url,
+        sent_count=sent_count, # Salva quantos receberam de verdade
+        created_at=datetime.now().isoformat()
+    )
+    db.add(history_item)
+    db.commit()
 
     return {"status": "success", "sent": sent_count, "cleaned": len(delete_ids)}
 
 # --- O DASHBOARD INTELIGENTE ---
 @router.get("/dashboard")
 def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
-    # 1. Vendas
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
-
-    # 2. Visitantes
     visitantes_unicos = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id).scalar() or 0
-    
-    # 3. Funil
-    qtd_checkout = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id, (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho") | VisitaApp.pagina.contains("cart"))).scalar() or 0
-
-    # 4. Abandonos
+    qtd_checkout = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id, (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho"))).scalar() or 0
     abandonos = max(0, qtd_checkout - qtd_vendas)
     ticket_medio = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
-    
-    # 5. Recorrência
     subquery = db.query(VendaApp.visitor_id).filter(VendaApp.store_id == store_id).group_by(VendaApp.visitor_id).having(func.count(VendaApp.id) > 1).subquery()
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
-
-    # 6. Pageviews & Top Paginas
     pageviews = db.query(VisitaApp).filter(VisitaApp.store_id == store_id).count()
     top_paginas = [p[0] for p in db.query(VisitaApp.pagina, func.count(VisitaApp.pagina).label('total')).filter(VisitaApp.store_id == store_id).group_by(VisitaApp.pagina).order_by(desc('total')).limit(5).all()]
 
