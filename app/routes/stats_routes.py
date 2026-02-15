@@ -15,15 +15,16 @@ from ..auth import get_current_store
 
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
-# --- CONFIGURAÇÃO PUSH (VAPID) ---
-# Importante: Essas chaves vêm do ambiente Railway
-VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
-VAPID_CLAIMS = os.getenv("VAPID_CLAIMS")
-if isinstance(VAPID_CLAIMS, str):
-    try: VAPID_CLAIMS = json.loads(VAPID_CLAIMS)
-    except: VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
-else:
+# --- CONFIGURAÇÃO PUSH (VAPID) BLINDADA ---
+# Usamos valores padrão para evitar erro no Build do Railway
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+
+# Carregamento seguro do JSON
+raw_claims = os.getenv("VAPID_CLAIMS", '{"sub": "mailto:admin@seuapp.com"}')
+try:
+    VAPID_CLAIMS = json.loads(raw_claims)
+except:
     VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
 
 # URL Backend para o Loader saber onde chamar
@@ -76,11 +77,6 @@ def send_webpush(subscription_info, message_body):
         return False
 
 # --- ROTA LOADER.JS (O CÉREBRO DO FRONTEND) ---
-# Esta rota serve o script que roda na loja do cliente.
-# Ela foi movida para cá ou pode ser importada no main.py. 
-# Se estiver usando no main.py, garanta que ela tenha acesso a VAPID_PUBLIC_KEY.
-# AQUI ESTÁ A VERSÃO COMPLETA QUE FAZ TUDO (Push, Analytics, FAB).
-
 @router.get("/loader.js", include_in_schema=False)
 def get_loader(store_id: str, db: Session = Depends(get_db)):
     # 1. Busca Configurações da Loja
@@ -107,6 +103,7 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
         """
 
     # 3. O Script Mágico Completo
+    # Injetamos a VAPID_PUBLIC_KEY aqui para o JS usar
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v3 (Push Enabled)");
@@ -135,7 +132,7 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
         window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); deferredPrompt = e; }});
         window.installPWA = function() {{
             if (deferredPrompt) {{ deferredPrompt.prompt(); }} 
-            else {{ alert("Para instalar:\\\\nAndroid: Menu > Adicionar à Tela\\\\niOS: Compartilhar > Adicionar à Tela"); }}
+            else {{ alert("Para instalar:\\\\\\\\nAndroid: Menu > Adicionar à Tela\\\\\\\\niOS: Compartilhar > Adicionar à Tela"); }}
         }};
 
         // --- PUSH NOTIFICATIONS ---
