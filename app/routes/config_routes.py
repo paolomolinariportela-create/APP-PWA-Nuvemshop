@@ -15,11 +15,23 @@ class ConfigPayload(BaseModel):
     theme_color: str
     logo_url: Optional[str] = None
     whatsapp: Optional[str] = None
+    # Novos campos opcionais para widgets
+    fab_enabled: Optional[bool] = False
+    fab_text: Optional[str] = "Baixar App"
 
 @router.get("/config")
 def get_config(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
     config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
-    if not config: return {"app_name": "Minha Loja", "theme_color": "#000000", "logo_url": "", "whatsapp": ""}
+    if not config: 
+        # Retorna padrão se não existir
+        return {
+            "app_name": "Minha Loja", 
+            "theme_color": "#000000", 
+            "logo_url": "", 
+            "whatsapp": "",
+            "fab_enabled": False,
+            "fab_text": "Baixar App"
+        }
     return config
 
 @router.get("/store-info")
@@ -38,6 +50,11 @@ def save_config(payload: ConfigPayload, store_id: str = Depends(get_current_stor
     config.theme_color = payload.theme_color
     config.logo_url = payload.logo_url
     config.whatsapp_number = payload.whatsapp
+    
+    # Salva Widgets
+    config.fab_enabled = payload.fab_enabled
+    config.fab_text = payload.fab_text
+    
     db.commit()
     return {"status": "success"}
 
