@@ -135,75 +135,93 @@ def install():
     return RedirectResponse(auth_url, status_code=303)
 
 
-@router.get("/callback") # Mudei para GET padrão, mas suporta POST se precisar
+@router.get("/callback")
 def callback(code: str = Query(None), db: Session = Depends(get_db)):
     """
-    Recebe o código da Nuvemshop, troca por token e salva no banco.
+    Callback Blindado: Trata erros da Nuvemshop e evita quebra do servidor.
     """
     if not code:
         return RedirectResponse(f"{FRONTEND_URL}?error=no_code")
     
     try:
         # 1. Troca CODE por TOKEN
-        res = requests.post("https://www.nuvemshop.com.br/apps/authorize/token", json={
+        payload = {
             "client_id": CLIENT_ID, 
             "client_secret": CLIENT_SECRET, 
             "grant_type": "authorization_code", 
             "code": code
-        })
+        }
         
+        # Log para debug (Não mostre o secret em logs reais, mas aqui ajuda)
+        print(f"DEBUG: Trocando code {code[:5]}... por token.")
+        
+        res = requests.post("https://www.nuvemshop.com.br/apps/authorize/token", json=payload)
+        
+        # Verifica se a requisição falhou (status diferente de 200)
         if res.status_code != 200:
-            print(f"Erro Token: {res.text}")
-            return JSONResponse(status_code=400, content={"error": "Falha Login Nuvemshop"})
+            print(f"❌ Erro Nuvemshop ({res.status_code}): {res.text}")
+            return JSONResponse(status_code=400, content={
+                "error": "Falha na autenticação com a Nuvemshop", 
+                "details": res.json() if res.headers.get('content-type') == 'application/json' else res.text
+            })
 
         data = res.json()
+        
+        # VERIFICA SE OS CAMPOS EXISTEM ANTES DE USAR
+        if "user_id" not in data or "access_token" not in data:
+            print(f"❌ Resposta incompleta da Nuvemshop: {data}")
+            return JSONResponse(status_code=400, content={"error": "Resposta inválida da Nuvemshop", "data": data})
+
         store_id = str(data["user_id"])
         raw_token = data["access_token"]
         
-        # 2. Busca info da loja (URL, Email)
+        print(f"✅ Sucesso! Loja: {store_id}")
+        
+        # --- (O RESTO DO CÓDIGO CONTINUA IGUAL ABAIXO) ---
+        
+        # 2. Busca info da loja...
         store_url = ""
         email = ""
         try:
             r = requests.get(f"https://api.nuvemshop.com.br/v1/{store_id}/store", headers={"Authentication": f"bearer {raw_token}"})
             if r.status_code == 200: 
-                store_info = r.json()
-                # Pega a URL HTTPS principal
-                store_url = store_info.get("url_with_protocol") or f"https://{store_info.get('main_domain')}"
-                email = store_info.get("email")
-        except: 
-            pass
+                info = r.json()
+                store_url = info.get("url_with_protocol") or f"https://{info.get('main_domain')}"
+                email = info.get("email")
+        except Exception as e: 
+            print(f"⚠️ Aviso: Não foi possível pegar detalhes da loja: {e}")
 
-        # 3. Salva/Atualiza no Banco (Tabela Loja)
-        # encrypt_token é opcional, se não usar criptografia, salve raw_token direto
-        encrypted_token = encrypt_token(raw_token) 
-        
+        # 3. Salva no Banco...
+        encrypted = encrypt_token(raw_token)
         loja = db.query(Loja).filter(Loja.store_id == store_id).first()
+        
         if not loja: 
-            loja = Loja(store_id=store_id, access_token=encrypted_token, url=store_url, email=email)
+            loja = Loja(store_id=store_id, access_token=encrypted, url=store_url, email=email)
             db.add(loja)
         else: 
-            loja.access_token = encrypted_token
+            loja.access_token = encrypted
             loja.url = store_url
-            loja.email = email
-        
-        # Cria config inicial se não existir
+            # Atualiza email se vier
+            if email: loja.email = email
+            
+        # Garante Config Inicial
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
         if not config:
-            db.add(AppConfig(store_id=store_id, app_name="Minha Loja", theme_color="#000000"))
-            
+             db.add(AppConfig(store_id=store_id, app_name="Minha Loja", theme_color="#000000"))
+             
         db.commit()
 
-        # 4. Executa Serviços (Cria página e Injeta Script)
-        # Importante: Passamos o raw_token (descriptografado) para a API da Nuvemshop
-        inject_script_tag(store_id, raw_token)
+        # 4. Executa Serviços...
+        print("🚀 Criando página e injetando scripts...")
         create_landing_page_internal(store_id, raw_token, "#000000")
+        inject_script_tag(store_id, raw_token)
 
-        # 5. Gera JWT e Redireciona para o Painel
+        # 5. Redireciona...
         jwt = create_jwt_token(store_id)
-        
-        # Redireciona para a página de Admin com o token na URL
         return RedirectResponse(f"{FRONTEND_URL}/admin?token={jwt}", status_code=303)
 
     except Exception as e:
-        print(f"Erro Crítico Callback: {e}")
-        return JSONResponse(status_code=500, content={"error": "Erro Interno no Servidor"})
+        # Pega o erro real e mostra no log
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": "Erro Interno no Servidor", "msg": str(e)})
