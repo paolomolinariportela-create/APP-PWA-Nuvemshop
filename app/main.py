@@ -13,7 +13,7 @@ from .routes import auth_routes, config_routes, stats_routes
 
 # Inicializa Banco
 Base.metadata.create_all(bind=engine)
-Base.metadata.drop_all(bind=engine)
+
 
 app = FastAPI()
 
