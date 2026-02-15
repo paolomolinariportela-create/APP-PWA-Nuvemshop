@@ -1,4 +1,3 @@
-# app/routes/auth_routes.py
 import os
 import requests
 from fastapi import APIRouter, Depends, Query
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Loja, AppConfig
 
-# IMPORTAÇÃO CORRETA E ÚNICA DO AUTH.PY
+# IMPORTAÇÃO CORRETA DAS VARIÁVEIS DE AMBIENTE (AUTH.PY)
 from app.auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token
 
 router = APIRouter(tags=["Auth"])
@@ -18,18 +17,20 @@ router = APIRouter(tags=["Auth"])
 FRONTEND_URL = os.getenv("FRONTEND_URL") or "http://localhost:5173"
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 
-# Garante HTTPS e remove barra final
+# Normalização de URLs
 if FRONTEND_URL and not FRONTEND_URL.startswith("http"): FRONTEND_URL = f"https://{FRONTEND_URL}"
 if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
 if BACKEND_URL and BACKEND_URL.endswith("/"): BACKEND_URL = BACKEND_URL[:-1]
 
 
-# --- FUNÇÃO AUXILIAR: CRIA PÁGINA NA LOJA ---
+# --- FUNÇÃO AUXILIAR: CRIA PÁGINA NA LOJA (CORRIGIDA) ---
 def create_landing_page_internal(store_id: str, access_token: str, theme_color: str):
     """
     Cria a página /pages/app na loja do cliente via API da Nuvemshop.
+    CORREÇÃO APLICADA: Usa api.tiendanube.com e estrutura JSON correta.
     """
-    url = f"https://api.nuvemshop.com.br/v1/{store_id}/pages"
+    url = f"https://api.tiendanube.com/v1/{store_id}/pages"
+    
     headers = {
         "Authentication": f"bearer {access_token}",
         "Content-Type": "application/json",
@@ -51,50 +52,72 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
     </div>
     """
 
+    # ESTRUTURA JSON CORRETA PARA NUVEMSHOP
     payload = {
-        "body": html_content,
-        "title": "Baixar App",
-        "url": "app",  # Cria /pages/app
-        "published": True,
-        "type": "raw"
+        "page": {
+            "title": "Baixar App",
+            "content": html_content,
+            "url": "app",  # Cria a url /pages/app
+            "published": True
+        }
     }
 
     try:
-        # Verifica se a página já existe
+        # Verifica se a página já existe (GET antes do POST)
         check = requests.get(url, headers=headers)
         if check.status_code == 200:
             pages = check.json()
             for p in pages:
-                if p.get("handle") == "app" or p.get("url") == "app":
-                    print(f"⚠️ Página 'app' já existe na loja {store_id}. Pulando criação.")
+                if p.get("url") == "app" or p.get("handle") == "app":
+                    print(f"⚠️ Página 'app' já existe na loja {store_id}. Pulando.")
                     return
 
-        # Cria a página
+        # Cria a página (POST)
         res = requests.post(url, json=payload, headers=headers)
+        
         if res.status_code == 201:
             print(f"✅ Página '/pages/app' criada com sucesso na loja {store_id}")
         else:
-            print(f"❌ Falha ao criar página: {res.text}")
+            print(f"❌ Falha ao criar página: {res.status_code} - {res.text}")
+            
     except Exception as e:
         print(f"❌ Erro de conexão ao criar página: {e}")
+
 
 # --- FUNÇÃO AUXILIAR: INJETA SCRIPT ---
 def inject_script_tag(store_id: str, access_token: str):
     """
     Injeta o loader.js na loja (ScriptTag).
     """
-    url = f"https://api.nuvemshop.com.br/v1/{store_id}/scripts"
+    url = f"https://api.tiendanube.com/v1/{store_id}/scripts" # Usando tiendanube.com por segurança
+    
     headers = {
         "Authentication": f"bearer {access_token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "AppBuilder (Builder)"
     }
+    
     payload = {
-        "src": f"{BACKEND_URL}/loader.js", # Aponta para nosso backend
+        "src": f"{BACKEND_URL}/loader.js", 
         "event": "onload"
     }
+    
     try:
-        requests.post(url, json=payload, headers=headers)
-        print(f"✅ Script injetado na loja {store_id}")
+        # Verifica scripts existentes para não duplicar
+        check = requests.get(url, headers=headers)
+        if check.status_code == 200:
+            scripts = check.json()
+            for s in scripts:
+                if "loader.js" in s.get("src", ""):
+                    print(f"⚠️ Script já injetado na loja {store_id}. Pulando.")
+                    return
+
+        res = requests.post(url, json=payload, headers=headers)
+        if res.status_code == 201:
+            print(f"✅ Script injetado na loja {store_id}")
+        else:
+            print(f"❌ Erro ao injetar script: {res.text}")
+            
     except Exception as e:
         print(f"❌ Erro ao injetar script: {e}")
 
@@ -115,7 +138,7 @@ def install():
         f"https://www.nuvemshop.com.br/apps/authorize/"
         f"?client_id={CLIENT_ID}"
         f"&response_type=code"
-        f"&scope=read_products,write_scripts,write_content"
+        f"&scope=read_products,write_scripts,write_content" # write_content é vital para criar páginas!
         f"&redirect_uri={REDIRECT_URI}" 
     )
     
@@ -147,34 +170,34 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
             print(f"❌ Erro Nuvemshop ({res.status_code}): {res.text}")
             return JSONResponse(status_code=400, content={
                 "error": "Falha na autenticação com a Nuvemshop", 
-                "details": res.json() if res.headers.get('content-type') == 'application/json' else res.text
+                "details": res.text
             })
 
         data = res.json()
         
-        # VERIFICA SE OS CAMPOS EXISTEM ANTES DE USAR
+        # VERIFICA SE OS CAMPOS EXISTEM
         if "user_id" not in data or "access_token" not in data:
-            print(f"❌ Resposta incompleta da Nuvemshop: {data}")
-            return JSONResponse(status_code=400, content={"error": "Resposta inválida da Nuvemshop", "data": data})
+            print(f"❌ Resposta incompleta: {data}")
+            return JSONResponse(status_code=400, content={"error": "Resposta inválida da Nuvemshop"})
 
         store_id = str(data["user_id"])
         raw_token = data["access_token"]
         
         print(f"✅ Sucesso! Loja: {store_id}")
         
-        # 2. Busca info da loja...
+        # 2. Busca info da loja
         store_url = ""
         email = ""
         try:
-            r = requests.get(f"https://api.nuvemshop.com.br/v1/{store_id}/store", headers={"Authentication": f"bearer {raw_token}"})
+            r = requests.get(f"https://api.tiendanube.com/v1/{store_id}/store", headers={"Authentication": f"bearer {raw_token}"})
             if r.status_code == 200: 
                 info = r.json()
                 store_url = info.get("url_with_protocol") or f"https://{info.get('main_domain')}"
                 email = info.get("email")
         except Exception as e: 
-            print(f"⚠️ Aviso: Não foi possível pegar detalhes da loja: {e}")
+            print(f"⚠️ Aviso: Falha ao obter detalhes da loja: {e}")
 
-        # 3. Salva no Banco...
+        # 3. Salva no Banco
         encrypted = encrypt_token(raw_token)
         loja = db.query(Loja).filter(Loja.store_id == store_id).first()
         
@@ -193,12 +216,12 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
              
         db.commit()
 
-        # 4. Executa Serviços...
-        print("🚀 Criando página e injetando scripts...")
+        # 4. Executa Serviços (Página e Scripts)
+        print("🚀 Executando configuração pós-install...")
         create_landing_page_internal(store_id, raw_token, "#000000")
         inject_script_tag(store_id, raw_token)
 
-        # 5. Redireciona...
+        # 5. Redireciona para o Painel
         jwt = create_jwt_token(store_id)
         return RedirectResponse(f"{FRONTEND_URL}/admin?token={jwt}", status_code=303)
 
