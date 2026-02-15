@@ -1,0 +1,4 @@
+[variables]
+VAPID_CLAIMS = '{"sub": "mailto:build@example.com"}'
+VAPID_PRIVATE_KEY = "dummy_key_for_build"
+VAPID_PUBLIC_KEY = "dummy_key_for_build"
