@@ -14,10 +14,27 @@ router = APIRouter(tags=["Auth"])
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 if FRONTEND_URL and not FRONTEND_URL.startswith("http"): FRONTEND_URL = f"https://{FRONTEND_URL}"
 
+# Em app/routes/auth_routes.py
+
 @router.get("/install")
 def install():
-    auth_url = f"https://www.nuvemshop.com.br/apps/authorize/?client_id={CLIENT_ID}&response_type=code&scope=read_products,write_scripts,write_content"
+    # URL do seu backend no Railway (SEM BARRA NO FINAL)
+    # Exemplo: https://web-production-xxxx.up.railway.app
+    BASE_URL = "https://web-production-0b509.up.railway.app" 
+    
+    # URL para onde a Nuvemshop vai devolver o código
+    REDIRECT_URI = f"{BASE_URL}/auth/callback"
+    
+    auth_url = (
+        f"https://www.nuvemshop.com.br/apps/authorize/"
+        f"?client_id={CLIENT_ID}"
+        f"&response_type=code"
+        f"&scope=read_products,write_scripts,write_content"
+        f"&redirect_uri={REDIRECT_URI}"  # <--- FALTAVA ISSO!
+    )
+    
     return RedirectResponse(auth_url, status_code=303)
+
 
 @router.api_route("/callback", methods=["GET", "POST"])
 def callback(code: str = Query(None), db: Session = Depends(get_db)):
