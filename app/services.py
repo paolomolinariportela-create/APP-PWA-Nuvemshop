@@ -1,11 +1,15 @@
 # services.py
 import os
 import requests
-from .auth import decrypt_token # Importa do arquivo que já existe
+from .auth import decrypt_token
 
-# URLs Globais (Mantendo a lógica original)
+# URLs Globais
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
+
+# URL do seu site de vendas (para o backlink)
+# Se não tiver um site de vendas ainda, pode colocar o link do app na loja de apps da Nuvemshop
+SEU_SITE_VENDAS = "https://www.seusite.com.br" 
 
 def inject_script_tag(store_id: str, encrypted_access_token: str):
     """Injeta o loader.js na loja"""
@@ -16,7 +20,6 @@ def inject_script_tag(store_id: str, encrypted_access_token: str):
         url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
         headers = { "Authentication": f"bearer {access_token}", "User-Agent": "App PWA Builder" }
         
-        # O script aponta para o seu backend
         script_url = f"{BACKEND_URL}/loader.js?store_id={store_id}"
         
         payload = { 
@@ -33,25 +36,17 @@ def inject_script_tag(store_id: str, encrypted_access_token: str):
             scripts = check.json()
             if isinstance(scripts, list):
                 for script in scripts:
-                    # Se já existe um script nosso, não cria outro
                     if "PWA Loader" in script.get("name", ""):
-                        print(f"⚠️ Script já existe na loja {store_id}")
                         return
 
-        # Cria o script se não existir
-        res = requests.post(url, json=payload, headers=headers)
-        if res.status_code == 201:
-            print(f"✅ Script injetado na loja {store_id}")
-        else:
-            print(f"⚠️ Falha ao injetar script: {res.text}")
-            
+        requests.post(url, json=payload, headers=headers)
+        print(f"✅ Script injetado na loja {store_id}")
     except Exception as e:
         print(f"❌ Erro Script: {e}")
 
 def create_landing_page_internal(store_id: str, encrypted_access_token: str, color: str):
     """
-    Cria ou atualiza a página /pages/app com um Template Otimizado para Conversão.
-    Detecta se é iPhone ou Android e mostra instruções específicas.
+    Cria a página /pages/app com Template Otimizado + Backlink SEO.
     """
     access_token = decrypt_token(encrypted_access_token)
     if not access_token: return
@@ -87,11 +82,15 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
             
             .features-list {{ margin-top: 30px; display: flex; justify-content: center; gap: 15px; font-size: 12px; color: #888; }}
             .feature-item {{ display: flex; align-items: center; gap: 5px; }}
+            
+            /* Rodapé com Backlink Discreto */
+            .app-footer-credits {{ margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; font-size: 11px; color: #aaa; }}
+            .app-footer-credits a {{ color: #888; text-decoration: none; transition: color 0.2s; }}
+            .app-footer-credits a:hover {{ color: {color}; }}
         </style>
 
         <div class="app-landing-wrapper">
             <div class="app-landing-card">
-                <!-- Ícone Genérico (Será substituído pelo real se o JS conseguir ler o manifesto) -->
                 <div class="app-icon-placeholder">📱</div>
                 
                 <h1 class="app-title-main">Baixe Nosso App</h1>
@@ -101,7 +100,7 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
                     INSTALAR AGORA ⬇️
                 </button>
 
-                <!-- Tutorial iOS (Escondido por padrão) -->
+                <!-- Tutorial iOS -->
                 <div id="ios-instructions" class="tutorial-box">
                     <h3 style="margin:0 0 10px 0; font-size:14px; color:#333;">Como instalar no iPhone:</h3>
                     <div class="tutorial-step">
@@ -114,7 +113,7 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
                     </div>
                 </div>
 
-                <!-- Tutorial Android (Escondido por padrão) -->
+                <!-- Tutorial Android -->
                 <div id="android-instructions" class="tutorial-box">
                     <h3 style="margin:0 0 10px 0; font-size:14px; color:#333;">Se não abrir automaticamente:</h3>
                     <div class="tutorial-step">
@@ -132,40 +131,35 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
                     <div class="feature-item">🔒 Seguro</div>
                     <div class="feature-item">🔔 Notificações</div>
                 </div>
+
+                <!-- Backlink Estratégico -->
+                <div class="app-footer-credits">
+                    <a href="{SEU_SITE_VENDAS}" target="_blank">
+                        Desenvolvido por <strong>App Builder PRO</strong>
+                    </a>
+                </div>
             </div>
             
             <script>
-                // Detecta SO
                 var ua = window.navigator.userAgent.toLowerCase();
                 var isIOS = /iphone|ipad|ipod/.test(ua);
-                var isAndroid = /android/.test(ua);
                 
                 function startInstall() {{
                     if (window.installPWA) {{
                         window.installPWA();
                     }} else {{
-                        // Se a função global do loader.js não estiver disponível
                         if(isIOS) {{
                             document.getElementById('ios-instructions').style.display = 'block';
                             alert("Siga as instruções abaixo para instalar 👇");
                         }} else {{
-                            // Assume Android ou Desktop
                             document.getElementById('android-instructions').style.display = 'block';
                         }}
                     }}
-                }}
-                
-                // Se for iOS, mostra instruções logo de cara se o usuário clicar
-                if(isIOS) {{
-                   // Pode-se optar por mostrar logo ou só no clique.
-                   // Deixamos oculto para manter o design limpo até a interação.
                 }}
             </script>
         </div>
         """
         
-        # Payload para a Nuvemshop
-        # handle: "app" força a URL a ser /pages/app
         payload = {
             "title": "Baixe o App", 
             "body": html_body, 
@@ -173,11 +167,7 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
             "handle": "app" 
         }
         
-        # POST cria uma nova página.
-        # Nota: Se já existir uma página com handle "app", a Nuvemshop pode criar "app-1".
-        # Idealmente, o lojista deve apagar a antiga antes de "Recriar" pelo painel.
         res = requests.post(url, json=payload, headers=headers)
-        
         if res.status_code == 201:
             print(f"✅ Página APP criada na loja {store_id}")
         else:
