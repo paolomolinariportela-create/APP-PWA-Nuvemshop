@@ -50,6 +50,37 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
         "icons": [{"src": icon, "sizes": "512x512", "type": "image/png"}]
     })
 
+@app.get("/service-worker.js")
+def get_service_worker():
+    js = """
+    self.addEventListener('push', function(event) {
+        const data = event.data.json();
+        
+        const options = {
+            body: data.body,
+            icon: data.icon || '/icon.png',
+            badge: '/badge.png',
+            vibrate: [100, 50, 100],
+            data: {
+                url: data.url
+            }
+        };
+
+        event.waitUntil(
+            self.registration.showNotification(data.title, options)
+        );
+    });
+
+    self.addEventListener('notificationclick', function(event) {
+        event.notification.close();
+        
+        event.waitUntil(
+            clients.openWindow(event.notification.data.url)
+        );
+    });
+    """
+    return Response(content=js, media_type="application/javascript")
+    
 @app.get("/loader.js")
 def get_loader(store_id: str, db: Session = Depends(get_db)):
     try: config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
