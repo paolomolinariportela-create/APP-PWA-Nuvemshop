@@ -229,3 +229,20 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": "Erro Interno no Servidor", "msg": str(e)})
+
+@router.get("/force-page")
+def force_page(token: str):
+    """
+    Rota de Teste: Cria a página manualmente para vermos o erro.
+    Uso: /auth/force-page?token=SEU_ACCESS_TOKEN_REAL
+    """
+    # Pegue o user_id do token (decodificando JWT ou fixo se souber)
+    # Como é teste, vamos tentar descobrir ou usar um fixo se você souber o ID da loja
+    # Mas o ideal é passar store_id também
+    return {"msg": "Use /auth/force-page-real?store_id=X&token=Y"}
+
+@router.get("/force-page-real")
+def force_page_real(store_id: str, token: str):
+    create_landing_page_internal(store_id, token, "#000000")
+    return {"status": "Tentativa feita. Olhe os logs do terminal."}
+
