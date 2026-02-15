@@ -1,32 +1,16 @@
+# app/routes/auth_routes.py
 import os
 import requests
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
-from cryptography.fernet import Fernet # Para criptografar o token (se usado)
-from app.auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token
 
 # --- IMPORTS INTERNOS ---
 from app.database import get_db
-from app.models import Loja, AppConfig # Importamos AppConfig para criar a config inicial
-# Assumindo que CLIENT_ID e SECRET estão em variáveis de ambiente ou config
-# Se não tiver um arquivo config.py, defina aqui ou importe de onde estiver
-try:
-    from app.config import CLIENT_ID, CLIENT_SECRET
-except ImportError:
-    CLIENT_ID = os.getenv("NUVEMSHOP_CLIENT_ID")
-    CLIENT_SECRET = os.getenv("NUVEMSHOP_CLIENT_SECRET")
+from app.models import Loja, AppConfig
 
-# Funções auxiliares de Token (Se você já tem um arquivo auth.py, mantenha o import)
-# Caso contrário, simplifiquei aqui para funcionar direto
-def encrypt_token(token: str) -> str:
-    # Simulação: Em produção use criptografia real!
-    return token 
-
-def create_jwt_token(store_id: str) -> str:
-    # Simulação: Retorna um token simples para o frontend
-    # Em produção use JWT real (PyJWT)
-    return f"temp_jwt_{store_id}"
+# IMPORTAÇÃO CORRETA E ÚNICA DO AUTH.PY
+from app.auth import CLIENT_ID, CLIENT_SECRET, encrypt_token, create_jwt_token
 
 router = APIRouter(tags=["Auth"])
 
@@ -37,7 +21,7 @@ BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 # Garante HTTPS e remove barra final
 if FRONTEND_URL and not FRONTEND_URL.startswith("http"): FRONTEND_URL = f"https://{FRONTEND_URL}"
 if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
-if BACKEND_URL.endswith("/"): BACKEND_URL = BACKEND_URL[:-1]
+if BACKEND_URL and BACKEND_URL.endswith("/"): BACKEND_URL = BACKEND_URL[:-1]
 
 
 # --- FUNÇÃO AUXILIAR: CRIA PÁGINA NA LOJA ---
@@ -76,7 +60,7 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
     }
 
     try:
-        # Verifica se a página já existe antes de criar (para não duplicar)
+        # Verifica se a página já existe
         check = requests.get(url, headers=headers)
         if check.status_code == 200:
             pages = check.json()
@@ -122,14 +106,16 @@ def install():
     """
     Inicia o fluxo OAuth.
     """
-    # Monta a URL de Callback baseada no ambiente
+    if not CLIENT_ID:
+        return JSONResponse(status_code=500, content={"error": "CLIENT_ID não configurado no servidor"})
+
     REDIRECT_URI = f"{BACKEND_URL}/auth/callback"
     
     auth_url = (
         f"https://www.nuvemshop.com.br/apps/authorize/"
         f"?client_id={CLIENT_ID}"
         f"&response_type=code"
-        f"&scope=read_products,write_scripts,write_content" # Permissões necessárias
+        f"&scope=read_products,write_scripts,write_content"
         f"&redirect_uri={REDIRECT_URI}" 
     )
     
@@ -153,12 +139,10 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
             "code": code
         }
         
-        # Log para debug (Não mostre o secret em logs reais, mas aqui ajuda)
-        print(f"DEBUG: Trocando code {code[:5]}... por token.")
+        print(f"DEBUG: Trocando code... CLIENT_ID={CLIENT_ID}")
         
         res = requests.post("https://www.nuvemshop.com.br/apps/authorize/token", json=payload)
         
-        # Verifica se a requisição falhou (status diferente de 200)
         if res.status_code != 200:
             print(f"❌ Erro Nuvemshop ({res.status_code}): {res.text}")
             return JSONResponse(status_code=400, content={
@@ -177,8 +161,6 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         raw_token = data["access_token"]
         
         print(f"✅ Sucesso! Loja: {store_id}")
-        
-        # --- (O RESTO DO CÓDIGO CONTINUA IGUAL ABAIXO) ---
         
         # 2. Busca info da loja...
         store_url = ""
@@ -202,7 +184,6 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         else: 
             loja.access_token = encrypted
             loja.url = store_url
-            # Atualiza email se vier
             if email: loja.email = email
             
         # Garante Config Inicial
@@ -222,7 +203,6 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         return RedirectResponse(f"{FRONTEND_URL}/admin?token={jwt}", status_code=303)
 
     except Exception as e:
-        # Pega o erro real e mostra no log
         import traceback
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": "Erro Interno no Servidor", "msg": str(e)})
