@@ -1,8 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Text
 from .database import Base
-from sqlalchemy import Text # Importe Text para campos longos
 
-# Tabela de Lojas (Login e Token)
+# Tabela de Lojas (Autenticação e Token)
 class Loja(Base):
     __tablename__ = "lojas"
 
@@ -12,7 +11,7 @@ class Loja(Base):
     email = Column(String, nullable=True)
     url = Column(String, nullable=True)
 
-# Tabela de Configuração (Cores e Nome do App)
+# Tabela de Configuração (Cores, Nome do App e Widgets)
 class AppConfig(Base):
     __tablename__ = "app_config"
 
@@ -24,9 +23,10 @@ class AppConfig(Base):
     whatsapp_number = Column(String, nullable=True)
     
     # --- WIDGETS DE CONVERSÃO ---
-    fab_enabled = Column(Boolean, default=False) # Botão Flutuante
+    fab_enabled = Column(Boolean, default=False) # Botão Flutuante 'Baixar App'
     fab_text = Column(String, default="Baixar App")
 
+# Tabela de Vendas (Estatísticas)
 class VendaApp(Base):
     __tablename__ = "vendas_app"
 
@@ -36,6 +36,7 @@ class VendaApp(Base):
     data = Column(String)
     visitor_id = Column(String, index=True, nullable=True)
 
+# Tabela de Visitas (Analytics)
 class VisitaApp(Base):
     __tablename__ = "visitas_app"
 
@@ -46,6 +47,7 @@ class VisitaApp(Base):
     is_pwa = Column(Boolean, default=False)
     visitor_id = Column(String, index=True, nullable=True)
 
+# Tabela de Notificações (Web Push)
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
@@ -53,9 +55,9 @@ class PushSubscription(Base):
     store_id = Column(String, index=True)
     visitor_id = Column(String, index=True)
     
-    # Dados técnicos do WebPush (Endpoint e Chaves)
+    # Dados técnicos do WebPush
     endpoint = Column(Text, nullable=False) # URL única do navegador
-    p256dh = Column(String, nullable=False) # Chave de criptografia 1
-    auth = Column(String, nullable=False)   # Chave de criptografia 2
+    p256dh = Column(String, nullable=False) # Chave Pública 1
+    auth = Column(String, nullable=False)   # Chave de Auth 2
     
     created_at = Column(String)
