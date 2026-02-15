@@ -22,21 +22,25 @@ class AppConfig(Base):
     logo_url = Column(String, nullable=True)
     whatsapp_number = Column(String, nullable=True)
     
+    # --- WIDGETS DE CONVERSÃO ---
+    fab_enabled = Column(Boolean, default=False) # Botão Flutuante
+    fab_text = Column(String, default="Baixar App")
+
 class VendaApp(Base):
     __tablename__ = "vendas_app"
 
     id = Column(Integer, primary_key=True, index=True)
     store_id = Column(String, index=True)
-    valor = Column(String) # Ex: "150.00"
-    data = Column(String)  # Data da venda
-    visitor_id = Column(String, index=True, nullable=True) # <--- NOVO: Identidade do comprador (para recorrência)
+    valor = Column(String)
+    data = Column(String)
+    visitor_id = Column(String, index=True, nullable=True)
 
 class VisitaApp(Base):
     __tablename__ = "visitas_app"
 
     id = Column(Integer, primary_key=True, index=True)
     store_id = Column(String, index=True)
-    data = Column(String) # Vamos guardar ISO format
-    pagina = Column(String) # Ex: "/" ou "/produto-x"
-    is_pwa = Column(Boolean, default=False) # Se está acessando pelo App ou Site
-    visitor_id = Column(String, index=True, nullable=True) # <--- NOVO: Identidade do visitante (para funil)
+    data = Column(String)
+    pagina = Column(String)
+    is_pwa = Column(Boolean, default=False)
+    visitor_id = Column(String, index=True, nullable=True)
