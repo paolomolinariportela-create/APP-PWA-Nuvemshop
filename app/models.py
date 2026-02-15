@@ -61,3 +61,18 @@ class PushSubscription(Base):
     auth = Column(String, nullable=False)   # Chave de Auth 2
     
     created_at = Column(String)
+
+# Adicione no final do app/models.py
+
+class PushHistory(Base):
+    __tablename__ = "push_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(String, index=True)
+    title = Column(String)
+    message = Column(String)
+    url = Column(String)
+    clicks = Column(Integer, default=0) # Para contar cliques no futuro
+    sent_count = Column(Integer, default=0) # Quantas pessoas receberam
+    created_at = Column(String) # Data de envio (ISO Format)
+
