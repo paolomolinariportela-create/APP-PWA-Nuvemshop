@@ -12,7 +12,7 @@ pydantic
 PyJWT
 cryptography
 python-jose[cryptography]
-pip install pywebpush
+pywebpush
 
 
 
