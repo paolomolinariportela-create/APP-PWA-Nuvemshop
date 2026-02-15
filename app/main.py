@@ -6,7 +6,8 @@ from fastapi.staticfiles import StaticFiles
 # --- IMPORTS INTERNOS ---
 from .database import engine, Base
 # Importamos TODAS as rotas agora (as antigas e as novas)
-from .routes import auth_routes, admin_routes, stats_routes, pwa_routes, loader_routes 
+from app.routes import auth_routes, admin_routes, loader_routes, push_routes, analytics_routes, pwa_routes
+
 
 # Inicializa Banco
 Base.metadata.create_all(bind=engine)
@@ -31,6 +32,9 @@ app.add_middleware(
 app.include_router(auth_routes.router)  
 app.include_router(admin_routes.router) 
 app.include_router(stats_routes.router) 
+app.include_router(push_routes.router)      # NOVO
+app.include_router(analytics_routes.router) # NOVO
+
 
 # Novas Rotas Modulares (Observe o prefixo /pwa para ficar organizado)
 app.include_router(pwa_routes.router, prefix="/pwa", tags=["PWA"]) 
