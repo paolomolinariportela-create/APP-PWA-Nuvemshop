@@ -21,6 +21,10 @@ class AppConfig(Base):
     theme_color = Column(String, default="#000000")
     logo_url = Column(String, nullable=True)
     whatsapp_number = Column(String, nullable=True)
+    fab_position = Column(String, default="right") # 'left' ou 'right'
+    fab_icon = Column(String, default="📲")      # O emoji ou URL
+    fab_animation = Column(Boolean, default=True) # Ativar pulso?
+    fab_delay = Column(Integer, default=0)        # Segundos para aparecer
     
     # --- WIDGETS DE CONVERSÃO ---
     fab_enabled = Column(Boolean, default=False) # Botão Flutuante 'Baixar App'
