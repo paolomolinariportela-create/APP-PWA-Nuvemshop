@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean
 from .database import Base
+from sqlalchemy import Text # Importe Text para campos longos
 
 # Tabela de Lojas (Login e Token)
 class Loja(Base):
@@ -44,3 +45,17 @@ class VisitaApp(Base):
     pagina = Column(String)
     is_pwa = Column(Boolean, default=False)
     visitor_id = Column(String, index=True, nullable=True)
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(String, index=True)
+    visitor_id = Column(String, index=True)
+    
+    # Dados técnicos do WebPush (Endpoint e Chaves)
+    endpoint = Column(Text, nullable=False) # URL única do navegador
+    p256dh = Column(String, nullable=False) # Chave de criptografia 1
+    auth = Column(String, nullable=False)   # Chave de criptografia 2
+    
+    created_at = Column(String)
