@@ -15,14 +15,17 @@ if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{
 # URL do seu site de vendas (para o backlink SEO)
 SEU_SITE_VENDAS = "https://www.seusite.com.br" 
 
-# Chaves VAPID (Carregadas do .env do Railway)
-VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
-VAPID_CLAIMS = os.getenv("VAPID_CLAIMS")
-if isinstance(VAPID_CLAIMS, str):
-    try: VAPID_CLAIMS = json.loads(VAPID_CLAIMS)
-    except: VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
-else:
+# --- CONFIGURAÇÃO PUSH (BLINDADA PARA BUILD) ---
+# Usamos valores padrão vazios para que o build não quebre se as vars não existirem
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+
+# Carregamento Seguro do JSON de Claims
+raw_claims = os.getenv("VAPID_CLAIMS", '{"sub": "mailto:admin@seuapp.com"}')
+try:
+    VAPID_CLAIMS = json.loads(raw_claims)
+except:
+    # Fallback seguro se o JSON estiver inválido ou vazio
     VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
 
 
