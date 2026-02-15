@@ -24,10 +24,13 @@ if BACKEND_URL and BACKEND_URL.endswith("/"): BACKEND_URL = BACKEND_URL[:-1]
 
 
 # --- FUNÇÃO AUXILIAR: CRIA PÁGINA NA LOJA (CORRIGIDA) ---
-# --- FUNÇÃO CORRIGIDA 1: CRIAÇÃO DE PÁGINA ---
+# --- FUNÇÃO DE DEBUG: CRIAÇÃO DE PÁGINA ---
 def create_landing_page_internal(store_id: str, access_token: str, theme_color: str):
-    # TENTATIVA 1: URL OFICIAL (api.tiendanube.com)
-    url = f"https://api.tiendanube.com/v1/{store_id}/pages"
+    # Tenta usar a URL base da API antiga e nova
+    urls = [
+        f"https://api.tiendanube.com/v1/{store_id}/pages",
+        f"https://api.nuvemshop.com.br/v1/{store_id}/pages"
+    ]
     
     headers = {
         "Authentication": f"bearer {access_token}",
@@ -35,44 +38,75 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
         "User-Agent": "AppBuilder (Builder)"
     }
     
-    html_content = f"""
-    <div style="text-align: center; padding: 40px; font-family: sans-serif;">
-        <h1 style="color: {theme_color};">Baixe Nosso App Oficial 📱</h1>
-        <p style="color: #666; font-size: 18px;">Ofertas exclusivas direto no seu celular.</p>
-        <div style="margin: 30px 0;">
-            <button id="pwa-install-btn" style="background: {theme_color}; color: #fff; padding: 15px 30px; border: none; border-radius: 50px; font-size: 18px; cursor: pointer;">
-                📲 Instalar Agora
-            </button>
-        </div>
-    </div>
-    """
-
     payload = {
-        "page": {
-            "title": "Baixar App",
-            "content": html_content,
-            "url": "app",
-            "published": True
-        }
+        "title": "Baixar App",
+        "body": "<h1>Baixe Nosso App</h1>", # Tenta formato antigo (body) primeiro
+        "url": "app",
+        "published": True,
+        "type": "raw"
     }
 
-    try:
-        print(f"DEBUG: Criando página em {url}")
-        res = requests.post(url, json=payload, headers=headers)
-        
-        # SE DER 404, TENTA A URL ALTERNATIVA (api.nuvemshop.com.br)
-        if res.status_code == 404:
-            print("⚠️ URL Oficial falhou (404). Tentando api.nuvemshop.com.br...")
-            url_alt = f"https://api.nuvemshop.com.br/v1/{store_id}/pages"
-            res = requests.post(url_alt, json=payload, headers=headers)
+    print(f"DEBUG: Tentando criar página para loja {store_id}...")
 
+    for url in urls:
+        try:
+            print(f"--> Testando POST em: {url}")
+            res = requests.post(url, json=payload, headers=headers)
+            print(f"    Status: {res.status_code}")
+            print(f"    Resposta: {res.text[:200]}...") # Mostra o começo da resposta
+
+            if res.status_code == 201:
+                print("✅ SUCESSO! Página criada.")
+                return
+            elif res.status_code == 404:
+                print("    Falha 404. Tentando próxima URL...")
+                continue
+            else:
+                print(f"    Falha genérica ({res.status_code}). Parando.")
+                break # Erro de permissão ou dados inválidos, não adianta tentar outra URL
+        except Exception as e:
+            print(f"❌ Erro Exception: {e}")
+
+    print("❌ Todas as tentativas de criar página falharam.")
+
+
+# --- FUNÇÃO DE DEBUG: INJEÇÃO DE SCRIPT ---
+def inject_script_tag(store_id: str, access_token: str):
+    url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
+    headers = {"Authentication": f"bearer {access_token}", "Content-Type": "application/json"}
+    
+    print(f"DEBUG: Verificando scripts em {url}...")
+    
+    try:
+        check = requests.get(url, headers=headers)
+        print(f"    Status GET: {check.status_code}")
+        print(f"    Conteúdo GET: {check.text}") # AQUI VAMOS VER O QUE ESTÁ VINDO ERRADO
+        
+        # Se for string, converte para lista vazia para não quebrar
+        scripts = check.json()
+        if isinstance(scripts, list):
+             for s in scripts:
+                 # Proteção contra string solta na lista
+                 if isinstance(s, str):
+                     print(f"⚠️ Aviso: API retornou string na lista de scripts: {s}")
+                     continue
+                 if "loader.js" in s.get("src", ""):
+                     print("✅ Script já existe.")
+                     return
+
+        # Tenta criar
+        payload = {"src": f"{BACKEND_URL}/loader.js", "event": "onload"}
+        res = requests.post(url, json=payload, headers=headers)
+        print(f"    Status POST: {res.status_code}")
+        
         if res.status_code == 201:
-            print(f"✅ Página '/pages/app' criada com sucesso!")
+            print("✅ Script criado com sucesso.")
         else:
-            print(f"❌ Falha Final ao criar página: {res.status_code} - {res.text}")
-            
+            print(f"❌ Falha ao criar script: {res.text}")
+
     except Exception as e:
-        print(f"❌ Erro de conexão página: {e}")
+        print(f"❌ Erro Exception Script: {e}")
+
 
 
 # --- FUNÇÃO CORRIGIDA 2: INJEÇÃO DE SCRIPT ---
