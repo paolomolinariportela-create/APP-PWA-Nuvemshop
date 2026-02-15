@@ -1,6 +1,6 @@
 import os
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, desc
 from datetime import datetime
@@ -10,23 +10,25 @@ from pywebpush import webpush, WebPushException
 
 # Importando do nível superior
 from ..database import get_db
-from ..models import VendaApp, VisitaApp, PushSubscription
+from ..models import VendaApp, VisitaApp, PushSubscription, AppConfig
 from ..auth import get_current_store
 
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
 # --- CONFIGURAÇÃO PUSH (VAPID) ---
+# Importante: Essas chaves vêm do ambiente Railway
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
-# Se não tiver claims no env, usa um padrão seguro
 VAPID_CLAIMS = os.getenv("VAPID_CLAIMS")
 if isinstance(VAPID_CLAIMS, str):
-    try:
-        VAPID_CLAIMS = json.loads(VAPID_CLAIMS)
-    except:
-        VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
+    try: VAPID_CLAIMS = json.loads(VAPID_CLAIMS)
+    except: VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
 else:
     VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
+
+# URL Backend para o Loader saber onde chamar
+BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
 
 # --- MODELOS DE ENTRADA ---
 class VendaPayload(BaseModel):
@@ -43,7 +45,7 @@ class VisitaPayload(BaseModel):
 # Modelo para Inscrição no Push
 class PushSubscribePayload(BaseModel):
     store_id: str
-    subscription: Dict[str, Any] # Objeto JSON que o navegador manda
+    subscription: Dict[str, Any]
     visitor_id: Optional[str] = None
 
 # Modelo para Envio de Push (Admin)
@@ -73,58 +75,163 @@ def send_webpush(subscription_info, message_body):
         print(f"Erro Push: {ex}")
         return False
 
-# --- ROTAS DE REGISTRO (Ouvidos do Sistema) ---
+# --- ROTA LOADER.JS (O CÉREBRO DO FRONTEND) ---
+# Esta rota serve o script que roda na loja do cliente.
+# Ela foi movida para cá ou pode ser importada no main.py. 
+# Se estiver usando no main.py, garanta que ela tenha acesso a VAPID_PUBLIC_KEY.
+# AQUI ESTÁ A VERSÃO COMPLETA QUE FAZ TUDO (Push, Analytics, FAB).
+
+@router.get("/loader.js", include_in_schema=False)
+def get_loader(store_id: str, db: Session = Depends(get_db)):
+    # 1. Busca Configurações da Loja
+    try: config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    except: config = None
+    
+    color = config.theme_color if config else "#000000"
+    fab_enabled = config.fab_enabled if config else False
+    fab_text = config.fab_text if config else "Baixar App"
+
+    # 2. Prepara Script do Botão Flutuante (FAB)
+    fab_script = ""
+    if fab_enabled:
+        fab_script = f"""
+        if (window.innerWidth < 900 && !isApp) {{
+            var fab = document.createElement('div');
+            fab.id = 'pwa-fab-btn';
+            fab.style.cssText = "position:fixed; bottom:20px; right:20px; background:{color}; color:white; padding:12px 24px; border-radius:50px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:999999; font-family:sans-serif; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; transition: transform 0.2s;";
+            fab.innerHTML = "<span style='font-size:18px'>📲</span> <span>{fab_text}</span>";
+            fab.onclick = function() {{ if(window.installPWA) window.installPWA(); }};
+            fab.animate([{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}], {{ duration: 500, easing: 'ease-out' }});
+            document.body.appendChild(fab);
+        }}
+        """
+
+    # 3. O Script Mágico Completo
+    js = f"""
+    (function() {{
+        console.log("🚀 PWA Loader Pro v3 (Push Enabled)");
+        
+        // Identidade
+        var visitorId = localStorage.getItem('pwa_v_id');
+        if(!visitorId) {{ visitorId = 'v_' + Math.random().toString(36).substr(2, 9); localStorage.setItem('pwa_v_id', visitorId); }}
+        var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        
+        // Meta Tags
+        var link = document.createElement('link'); link.rel = 'manifest'; link.href = '{BACKEND_URL}/manifest/{store_id}.json'; document.head.appendChild(link);
+        var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
+
+        // Analytics
+        function trackVisit() {{
+            try {{ fetch('{BACKEND_URL}/stats/visita', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }}) }}); }} catch(e) {{}}
+        }}
+        trackVisit();
+        
+        // Observer SPA
+        var oldHref = document.location.href;
+        new MutationObserver(function() {{ if (oldHref !== document.location.href) {{ oldHref = document.location.href; trackVisit(); }} }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
+
+        // Instalação PWA
+        var deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); deferredPrompt = e; }});
+        window.installPWA = function() {{
+            if (deferredPrompt) {{ deferredPrompt.prompt(); }} 
+            else {{ alert("Para instalar:\\\\nAndroid: Menu > Adicionar à Tela\\\\niOS: Compartilhar > Adicionar à Tela"); }}
+        }};
+
+        // --- PUSH NOTIFICATIONS ---
+        const publicVapidKey = "{VAPID_PUBLIC_KEY}";
+
+        function urlBase64ToUint8Array(base64String) {{
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {{ outputArray[i] = rawData.charCodeAt(i); }}
+            return outputArray;
+        }}
+
+        async function subscribePush() {{
+            if ('serviceWorker' in navigator && publicVapidKey) {{
+                try {{
+                    // Registra o Service Worker Global
+                    const registration = await navigator.serviceWorker.register('{BACKEND_URL}/service-worker.js');
+                    await navigator.serviceWorker.ready;
+
+                    // Se inscreve no Push Manager
+                    const subscription = await registration.pushManager.subscribe({{
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    }});
+
+                    // Envia token para o Backend
+                    await fetch('{BACKEND_URL}/stats/push/subscribe', {{
+                        method: 'POST',
+                        body: JSON.stringify({{ subscription: subscription, store_id: '{store_id}', visitor_id: visitorId }}),
+                        headers: {{ 'Content-Type': 'application/json' }}
+                    }});
+                    console.log("✅ Push Inscrito!");
+                }} catch (err) {{ console.log("Push info:", err); }}
+            }}
+        }}
+
+        // Tenta inscrever se for PWA ou se o usuário clicar em algo (futuro)
+        if (isApp) {{ subscribePush(); }}
+
+        // Widgets
+        {fab_script}
+
+        // Vendas
+        if (window.location.href.includes('/checkout/success') && isApp) {{
+            var val = "0.00";
+            if (window.dataLayer) {{ for(var i=0; i<window.dataLayer.length; i++) {{ if(window.dataLayer[i].transactionTotal) {{ val = window.dataLayer[i].transactionTotal; break; }} }} }}
+            var oid = window.location.href.split('/').pop();
+            if (!localStorage.getItem('venda_'+oid) && parseFloat(val) > 0) {{
+                fetch('{BACKEND_URL}/stats/venda', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{ store_id:'{store_id}', valor:val.toString(), visitor_id: visitorId }}) }});
+                localStorage.setItem('venda_'+oid, 'true');
+            }}
+        }}
+    }})();
+    """
+    return Response(content=js, media_type="application/javascript")
+
+
+# --- ROTAS DE REGISTRO (Analytics) ---
 
 @router.post("/visita")
 def registrar_visita(payload: VisitaPayload, db: Session = Depends(get_db)):
-    db.add(VisitaApp(
-        store_id=payload.store_id, 
-        pagina=payload.pagina, 
-        is_pwa=payload.is_pwa,
-        visitor_id=payload.visitor_id,
-        data=datetime.now().isoformat()
-    ))
+    db.add(VisitaApp(store_id=payload.store_id, pagina=payload.pagina, is_pwa=payload.is_pwa, visitor_id=payload.visitor_id, data=datetime.now().isoformat()))
     db.commit()
     return {"status": "ok"}
 
 @router.post("/venda")
 def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
-    db.add(VendaApp(
-        store_id=payload.store_id, 
-        valor=payload.valor, 
-        visitor_id=payload.visitor_id,
-        data=datetime.now().isoformat()
-    ))
+    db.add(VendaApp(store_id=payload.store_id, valor=payload.valor, visitor_id=payload.visitor_id, data=datetime.now().isoformat()))
     db.commit()
     return {"status": "ok"}
 
-# --- ROTAS DE PUSH NOTIFICATIONS ---
+# --- ROTAS DE PUSH (Subscribe & Send) ---
 
 @router.post("/push/subscribe")
 def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db)):
-    """Salva o token do usuário para receber notificações"""
+    """Salva o token do usuário"""
     try:
         sub_data = payload.subscription
         endpoint = sub_data.get("endpoint")
         keys = sub_data.get("keys", {})
-        p256dh = keys.get("p256dh")
-        auth = keys.get("auth")
-
-        if not endpoint or not p256dh or not auth:
+        
+        if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
             return {"status": "error", "message": "Dados inválidos"}
 
-        # Verifica se já existe
         exists = db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
         if not exists:
-            new_sub = PushSubscription(
+            db.add(PushSubscription(
                 store_id=payload.store_id,
                 visitor_id=payload.visitor_id,
                 endpoint=endpoint,
-                p256dh=p256dh,
-                auth=auth,
+                p256dh=keys.get("p256dh"),
+                auth=keys.get("auth"),
                 created_at=datetime.now().isoformat()
-            )
-            db.add(new_sub)
+            ))
             db.commit()
             return {"status": "subscribed"}
         
@@ -135,117 +242,59 @@ def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db))
 
 @router.post("/admin/send-push")
 def send_push_campaign(payload: PushSendPayload, store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
-    """Rota protegida para o Lojista enviar notificações"""
-    
-    # Busca todos os inscritos desta loja
+    """Envia notificação para todos"""
     subs = db.query(PushSubscription).filter(PushSubscription.store_id == store_id).all()
-    
-    if not subs:
-        return {"status": "success", "sent": 0, "message": "Nenhum inscrito ainda."}
+    if not subs: return {"status": "success", "sent": 0, "message": "Nenhum inscrito."}
 
-    message_body = {
-        "title": payload.title,
-        "body": payload.message,
-        "url": payload.url,
-        "icon": payload.icon
-    }
-
-    sent_count = 0
-    delete_ids = []
+    message_body = { "title": payload.title, "body": payload.message, "url": payload.url, "icon": payload.icon }
+    sent_count = 0; delete_ids = []
 
     for sub in subs:
-        subscription_info = {
-            "endpoint": sub.endpoint,
-            "keys": {
-                "p256dh": sub.p256dh,
-                "auth": sub.auth
-            }
-        }
-        
-        result = send_webpush(subscription_info, message_body)
-        
-        if result == True:
-            sent_count += 1
-        elif result == "DELETE":
-            delete_ids.append(sub.id)
+        res = send_webpush({"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, message_body)
+        if res == True: sent_count += 1
+        elif res == "DELETE": delete_ids.append(sub.id)
 
-    # Limpeza de inscritos inativos
     if delete_ids:
         db.query(PushSubscription).filter(PushSubscription.id.in_(delete_ids)).delete(synchronize_session=False)
         db.commit()
 
     return {"status": "success", "sent": sent_count, "cleaned": len(delete_ids)}
 
-
-# --- O DASHBOARD INTELIGENTE (Mantido Igual) ---
+# --- O DASHBOARD INTELIGENTE ---
 @router.get("/dashboard")
 def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
-    # 1. Vendas e Receita
+    # 1. Vendas
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
 
-    # 2. Visitantes Únicos (Base para cálculos)
+    # 2. Visitantes
     visitantes_unicos = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id).scalar() or 0
     
-    # 3. Funil (Quem chegou no checkout/carrinho)
-    qtd_checkout = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(
-        VisitaApp.store_id == store_id, 
-        (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho") | VisitaApp.pagina.contains("cart"))
-    ).scalar() or 0
+    # 3. Funil
+    qtd_checkout = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id, (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho") | VisitaApp.pagina.contains("cart"))).scalar() or 0
 
-    # 4. Carrinhos Abandonados
+    # 4. Abandonos
     abandonos = max(0, qtd_checkout - qtd_vendas)
-    ticket_medio_app = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
-    valor_perdido = abandonos * ticket_medio_app
-
+    ticket_medio = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
+    
     # 5. Recorrência
-    subquery = db.query(VendaApp.visitor_id).filter(VendaApp.store_id == store_id)\
-                 .group_by(VendaApp.visitor_id).having(func.count(VendaApp.id) > 1).subquery()
+    subquery = db.query(VendaApp.visitor_id).filter(VendaApp.store_id == store_id).group_by(VendaApp.visitor_id).having(func.count(VendaApp.id) > 1).subquery()
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
 
-    # 6. Pageviews Totais
+    # 6. Pageviews & Top Paginas
     pageviews = db.query(VisitaApp).filter(VisitaApp.store_id == store_id).count()
-
-    # 7. Top Páginas
-    top_paginas_query = db.query(VisitaApp.pagina, func.count(VisitaApp.pagina).label('total'))\
-        .filter(VisitaApp.store_id == store_id)\
-        .group_by(VisitaApp.pagina)\
-        .order_by(desc('total'))\
-        .limit(5).all()
-    
-    top_paginas_list = [p[0] for p in top_paginas_query]
-
-    # 8. Taxas Calculadas
-    taxa_conversao_app = round((qtd_vendas / max(1, visitantes_unicos) * 100), 1)
-    taxa_recompra = round((recorrentes / max(1, qtd_vendas) * 100), 1)
+    top_paginas = [p[0] for p in db.query(VisitaApp.pagina, func.count(VisitaApp.pagina).label('total')).filter(VisitaApp.store_id == store_id).group_by(VisitaApp.pagina).order_by(desc('total')).limit(5).all()]
 
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": visitantes_unicos,
-        "carrinhos_abandonados": { "valor": valor_perdido, "qtd": abandonos },
-        "visualizacoes": { 
-            "pageviews": pageviews, 
-            "tempo_medio": "Calculando...", 
-            "top_paginas": top_paginas_list 
-        },
-        "funil": { 
-            "visitas": visitantes_unicos, 
-            "carrinho": qtd_checkout, 
-            "checkout": qtd_vendas 
-        },
-        "recorrencia": { 
-            "clientes_2x": recorrentes, 
-            "taxa_recompra": taxa_recompra 
-        },
-        "ticket_medio": { 
-            "app": round(ticket_medio_app, 2), 
-            "site": 0.0 
-        },
-        "taxa_conversao": { 
-            "app": taxa_conversao_app, 
-            "site": 0.0 
-        },
+        "carrinhos_abandonados": { "valor": abandonos * ticket_medio, "qtd": abandonos },
+        "visualizacoes": { "pageviews": pageviews, "tempo_medio": "--", "top_paginas": top_paginas },
+        "funil": { "visitas": visitantes_unicos, "carrinho": qtd_checkout, "checkout": qtd_vendas },
+        "recorrencia": { "clientes_2x": recorrentes, "taxa_recompra": round((recorrentes / max(1, qtd_vendas) * 100), 1) },
+        "ticket_medio": { "app": round(ticket_medio, 2), "site": 0.0 },
+        "taxa_conversao": { "app": round((qtd_vendas / max(1, visitantes_unicos) * 100), 1), "site": 0.0 },
         "economia_ads": visitantes_unicos * 0.50
     }
