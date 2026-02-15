@@ -1,40 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Store
-from typing import Optional
+# CORREÇÃO 1: Importamos AppConfig, onde estão as cores e nomes
+from app.models import AppConfig 
 
 router = APIRouter()
 
 @router.get("/manifest/{store_id}.json")
-async def get_manifest(store_id: str, db: Session = Depends(get_db)):
+def get_manifest(store_id: str, db: Session = Depends(get_db)):
     """
-    Gera o manifesto do PWA dinamicamente para cada loja.
-    O navegador do visitante vai acessar essa URL.
+    Gera o manifesto PWA dinamicamente.
     """
-    # 1. Busca as configurações da loja no banco de dados
-    store = db.query(Store).filter(Store.store_id == store_id).first()
+    try:
+        # CORREÇÃO 2: Buscamos na tabela certa (AppConfig)
+        config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    except Exception as e:
+        print(f"Erro no banco PWA: {e}")
+        config = None
 
-    if not store:
-        # Se a loja não configurou o app, retorna um manifesto genérico ou erro 404
-        raise HTTPException(status_code=404, detail="Loja não encontrada ou não configurada")
-
-    # 2. Define valores padrão caso o lojista não tenha preenchido tudo
-    app_name = store.app_name or "Minha Loja"
-    short_name = store.app_name[:12] if store.app_name else "Loja"
-    theme_color = store.theme_color or "#000000"
-    background_color = store.background_color or "#ffffff"
+    # Lógica de Fallback (Segurança se não tiver config)
+    app_name = config.app_name if config else "Minha Loja"
+    theme_color = config.theme_color if config else "#000000"
+    background_color = "#ffffff"
     
-    # Ícones: O ideal é ter o link da imagem hospedada. 
-    # Por enquanto, vamos usar um placeholder se não tiver.
-    icon_src = store.app_icon_url or "https://via.placeholder.com/192.png?text=App"
-
-    # 3. Monta o JSON do Manifesto (Padrão PWA)
-    manifest = {
+    # Ícone seguro
+    icon_src = config.logo_url if (config and config.logo_url) else "https://cdn-icons-png.flaticon.com/512/3081/3081559.png"
+    
+    return JSONResponse({
         "name": app_name,
-        "short_name": short_name,
-        "start_url": "/",
+        "short_name": app_name[:12],
+        "start_url": f"/?utm_source=pwa_app&store_id={store_id}",
         "display": "standalone",
         "background_color": background_color,
         "theme_color": theme_color,
@@ -51,8 +47,43 @@ async def get_manifest(store_id: str, db: Session = Depends(get_db)):
                 "type": "image/png"
             }
         ]
-    }
+    })
 
-    # Retorna com o cabeçalho correto para JSON
-    return JSONResponse(content=manifest)
+# CORREÇÃO 3: Adicionamos a rota vital do Service Worker que faltava
+@router.get("/service-worker.js")
+def get_service_worker():
+    """
+    Script vital para Push Notifications e Cache Offline.
+    O navegador exige que este arquivo exista para permitir a instalação.
+    """
+    js_content = """
+    self.addEventListener('install', (event) => {
+        console.log('Service Worker: Instalado');
+        self.skipWaiting();
+    });
 
+    self.addEventListener('activate', (event) => {
+        console.log('Service Worker: Ativo');
+        return self.clients.claim();
+    });
+    
+    // Lógica básica de Push (Preparo para o futuro)
+    self.addEventListener('push', function(event) {
+        if (!(self.Notification && self.Notification.permission === 'granted')) return;
+        const data = event.data ? event.data.json() : {};
+        event.waitUntil(
+            self.registration.showNotification(data.title || 'Novidade na Loja', {
+                body: data.body || 'Toque para conferir!',
+                icon: data.icon || '/icon.png',
+                data: { url: data.url || '/' }
+            })
+        );
+    });
+
+    self.addEventListener('notificationclick', function(event) {
+        event.notification.close();
+        event.waitUntil(clients.openWindow(event.notification.data.url));
+    });
+    """
+    # Importante: Retorna como Javascript, não como JSON
+    return Response(content=js_content, media_type="application/javascript")
