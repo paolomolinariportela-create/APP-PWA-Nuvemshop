@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-
+from app.routes import auth_routes, admin_routes, stats_routes, pwa_routes
 # Imports Internos
 from .database import engine, Base, get_db
 from .models import AppConfig
