@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppConfig 
+from app.security import validate_proxy_hmac  # novo import
 
 router = APIRouter()
 
@@ -51,7 +52,10 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     })
 
 @router.get("/service-worker.js")
-def get_service_worker():
+async def get_service_worker(
+    request: Request,
+    _valid=Depends(validate_proxy_hmac)  # valida HMAC do App Proxy
+):
     """
     Service Worker para Push Notifications e Cache básico (seguro).
     """
