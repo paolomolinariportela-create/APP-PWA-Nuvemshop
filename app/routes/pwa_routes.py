@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-# CORREÇÃO 1: Importamos AppConfig, onde estão as cores e nomes
 from app.models import AppConfig 
 
 router = APIRouter()
@@ -13,19 +12,21 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     Gera o manifesto PWA dinamicamente.
     """
     try:
-        # CORREÇÃO 2: Buscamos na tabela certa (AppConfig)
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     except Exception as e:
         print(f"Erro no banco PWA: {e}")
         config = None
 
-    # Lógica de Fallback (Segurança se não tiver config)
+    # Fallbacks seguros
     app_name = config.app_name if config else "Minha Loja"
     theme_color = config.theme_color if config else "#000000"
     background_color = "#ffffff"
     
-    # Ícone seguro
-    icon_src = config.logo_url if (config and config.logo_url) else "https://cdn-icons-png.flaticon.com/512/3081/3081559.png"
+    icon_src = (
+        config.logo_url
+        if (config and config.logo_url)
+        else "https://cdn-icons-png.flaticon.com/512/3081/3081559.png"
+    )
     
     return JSONResponse({
         "name": app_name,
@@ -49,25 +50,105 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
         ]
     })
 
-# CORREÇÃO 3: Adicionamos a rota vital do Service Worker que faltava
 @router.get("/service-worker.js")
 def get_service_worker():
     """
-    Script vital para Push Notifications e Cache Offline.
-    O navegador exige que este arquivo exista para permitir a instalação.
+    Service Worker para Push Notifications e Cache básico (seguro).
     """
     js_content = """
+    const CACHE_NAME = 'app-builder-cache-v1';
+    const PRECACHE_URLS = [
+        // Arquivos essenciais do PWA (ajuste caminhos se necessário)
+        '/service-worker.js',
+        '/favicon.ico'
+        // Você pode adicionar aqui ícones locais, ex: '/icon-192.png', '/icon-512.png'
+    ];
+
     self.addEventListener('install', (event) => {
         console.log('Service Worker: Instalado');
+        event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => {
+                return cache.addAll(PRECACHE_URLS).catch((err) => {
+                    console.warn('SW: erro ao fazer precache', err);
+                });
+            })
+        );
         self.skipWaiting();
     });
 
     self.addEventListener('activate', (event) => {
         console.log('Service Worker: Ativo');
+        event.waitUntil(
+            caches.keys().then((keys) => {
+                return Promise.all(
+                    keys.map((key) => {
+                        if (key !== CACHE_NAME) {
+                            console.log('SW: removendo cache antigo', key);
+                            return caches.delete(key);
+                        }
+                    })
+                );
+            })
+        );
         return self.clients.claim();
     });
+
+    // Estratégia de cache simples:
+    // - Arquivos estáticos (js, css, imagens, manifest): stale-while-revalidate
+    // - HTML / páginas da loja: rede primeiro (não cacheamos agressivo)
+    self.addEventListener('fetch', (event) => {
+        const req = event.request;
+
+        // Só lidamos com GET
+        if (req.method !== 'GET') {
+            return;
+        }
+
+        const acceptHeader = req.headers.get('Accept') || '';
+
+        // Se for navegação HTML (páginas da loja), deixamos seguir pela rede
+        if (acceptHeader.includes('text/html')) {
+            return;
+        }
+
+        // Para arquivos estáticos: aplicamos stale-while-revalidate
+        if (
+            req.url.includes('/manifest') ||
+            req.url.endsWith('.js') ||
+            req.url.endsWith('.css') ||
+            req.url.endsWith('.png') ||
+            req.url.endsWith('.jpg') ||
+            req.url.endsWith('.jpeg') ||
+            req.url.endsWith('.svg') ||
+            req.url.endsWith('.ico') ||
+            req.url.includes('/service-worker.js')
+        ) {
+            event.respondWith(
+                caches.match(req).then((cachedResponse) => {
+                    const fetchPromise = fetch(req)
+                        .then((networkResponse) => {
+                            // Atualiza o cache em segundo plano
+                            caches.open(CACHE_NAME).then((cache) => {
+                                cache.put(req, networkResponse.clone());
+                            });
+                            return networkResponse;
+                        })
+                        .catch((err) => {
+                            if (cachedResponse) {
+                                return cachedResponse;
+                            }
+                            throw err;
+                        });
+
+                    // Se tiver cache, retorna rápido, mas ainda busca rede
+                    return cachedResponse || fetchPromise;
+                })
+            );
+        }
+        // Qualquer outra requisição (ex: APIs da loja) passa direto
+    });
     
-    // Lógica básica de Push (Preparo para o futuro)
+    // Push Notifications
     self.addEventListener('push', function(event) {
         if (!(self.Notification && self.Notification.permission === 'granted')) return;
         const data = event.data ? event.data.json() : {};
@@ -85,5 +166,4 @@ def get_service_worker():
         event.waitUntil(clients.openWindow(event.notification.data.url));
     });
     """
-    # Importante: Retorna como Javascript, não como JSON
     return Response(content=js_content, media_type="application/javascript")
