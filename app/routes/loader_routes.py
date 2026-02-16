@@ -47,65 +47,64 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # CSS Dinâmico da Posição do FAB
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
-    # 3. Gera o Script do Botão Flutuante (FAB)
+    # Script do Botão Flutuante (FAB) – será executado no bloco deferido
     fab_script = ""
     if fab_enabled:
-        # O script abaixo cria o botão via JS puro, sem dependências externas
         fab_script = f"""
-        if (window.innerWidth < 900 && !isApp) {{
-            setTimeout(function() {{
-                var fab = document.createElement('div');
-                fab.id = 'pwa-fab-btn';
-                // Estilos inline para garantir que nenhum CSS da loja quebre o botão
-                fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{color}; color:white; padding:12px 24px; border-radius:50px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; transition: all 0.3s ease;";
-                fab.innerHTML = "<span style='font-size:18px'>{fab_icon}</span> <span>{fab_text}</span>";
-                
-                // Ação de Clique
-                fab.onclick = function() {{ 
-                    if(window.deferredPrompt) {{
-                        window.deferredPrompt.prompt();
-                        window.deferredPrompt.userChoice.then(function(choiceResult){{
-                            if(choiceResult.outcome === 'accepted') fab.style.display = 'none';
-                            window.deferredPrompt = null;
-                        }});
-                    }} else {{
-                         alert("Para instalar:\\\\nAndroid: Menu > Adicionar à Tela\\\\niOS: Compartilhar > Adicionar à Tela");
-                    }}
-                }};
-                
-                // Animação de Entrada
-                fab.animate([{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}], {{ duration: 500, easing: 'ease-out' }});
-                document.body.appendChild(fab);
+                if (window.innerWidth < 900 && !isApp) {{
+                    setTimeout(function() {{
+                        var fab = document.createElement('div');
+                        fab.id = 'pwa-fab-btn';
+                        // Estilos inline para garantir que nenhum CSS da loja quebre o botão
+                        fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{color}; color:white; padding:12px 24px; border-radius:50px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; transition: all 0.3s ease;";
+                        fab.innerHTML = "<span style='font-size:18px'>{fab_icon}</span> <span>{fab_text}</span>";
+                        
+                        // Ação de Clique
+                        fab.onclick = function() {{ 
+                            if(window.deferredPrompt) {{
+                                window.deferredPrompt.prompt();
+                                window.deferredPrompt.userChoice.then(function(choiceResult){{
+                                    if(choiceResult.outcome === 'accepted') fab.style.display = 'none';
+                                    window.deferredPrompt = null;
+                                }});
+                            }} else {{
+                                 alert("Para instalar:\\\\nAndroid: Menu > Adicionar à Tela\\\\niOS: Compartilhar > Adicionar à Tela");
+                            }}
+                        }};
+                        
+                        // Animação de Entrada
+                        fab.animate([{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}], {{ duration: 500, easing: 'ease-out' }});
+                        document.body.appendChild(fab);
 
-                // Efeito 'Pulse' a cada 5 segundos para chamar atenção
-                setInterval(() => {{
-                    fab.animate([
-                        {{ transform: 'scale(1)' }},
-                        {{ transform: 'scale(1.05)' }},
-                        {{ transform: 'scale(1)' }}
-                    ], {{ duration: 1000 }});
-                }}, 5000);
+                        // Efeito 'Pulse' a cada 5 segundos para chamar atenção
+                        setInterval(() => {{
+                            fab.animate([
+                                {{ transform: 'scale(1)' }},
+                                {{ transform: 'scale(1.05)' }},
+                                {{ transform: 'scale(1)' }}
+                            ], {{ duration: 1000 }});
+                        }}, 5000);
 
-            }}, {fab_delay * 1000}); // Aplica o delay configurado
-        }}
+                    }}, {fab_delay * 1000}); // Aplica o delay configurado
+                }}
         """
 
-    # 4. O Script Mágico Completo (Javascript Gerado)
+    # 4. Script completo (bloco crítico + bloco deferido)
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v4 (Analytics + Push + Widget + LS)");
 
-        // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
+        // --- A. IDENTIFICAÇÃO DO USUÁRIO (CRÍTICO) ---
         var visitorId = localStorage.getItem('pwa_v_id');
         if(!visitorId) {{ 
             visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36); 
             localStorage.setItem('pwa_v_id', visitorId); 
         }}
         
-        // Detecta se está rodando como APP ou no Navegador
+        // Detecta se está rodando como APP ou no Navegador (CRÍTICO)
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
         
-        // --- B. INJEÇÃO DE METADADOS ---
+        // --- B. INJEÇÃO DE METADADOS (CRÍTICO) ---
         // Injeta o Manifest.json dinâmico
         var link = document.createElement('link'); 
         link.rel = 'manifest'; 
@@ -118,7 +117,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         meta.content = '{color}'; 
         document.head.appendChild(meta);
 
-        // --- C. ANALYTICS (Rastreio de Visitas) COM LS ---
+        // --- C. ANALYTICS (CRÍTICO: PRIMEIRA VISITA) ---
         function buildVisitPayload() {{
             var payload = {{
                 store_id: '{store_id}',
@@ -166,27 +165,15 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }}); 
             }} catch(e) {{ console.error("Erro Analytics:", e); }}
         }}
-        
-        // Rastreia a primeira visita
-        trackVisit();
-        
-        // Rastreia mudanças de página (SPA - Single Page Applications)
-        var oldHref = document.location.href;
-        new MutationObserver(function() {{ 
-            if (oldHref !== document.location.href) {{ 
-                oldHref = document.location.href; 
-                trackVisit(); 
-            }} 
-        }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
 
-        // --- D. INSTALAÇÃO (Captura o evento) ---
+        // --- D. INSTALAÇÃO (CRÍTICO: captura do beforeinstallprompt) ---
         window.deferredPrompt = null;
         window.addEventListener('beforeinstallprompt', (e) => {{ 
             e.preventDefault(); 
             window.deferredPrompt = e; 
         }});
 
-        // --- E. PUSH NOTIFICATIONS ---
+        // --- E. PUSH NOTIFICATIONS (CRÍTICO: registro SW + inscrição) ---
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
@@ -231,40 +218,108 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // Tenta inscrever no Push se for o APP instalado
-        if (isApp) {{ subscribePush(); }}
-        
-        // Injeta o script do botão flutuante (se ativado)
-        {fab_script}
-
-        // --- F. RASTREIO DE VENDAS (Conversão) ---
-        // Tenta detectar venda na página de "Obrigado/Success"
-        if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
-            var val = "0.00";
-            
-            // Tenta achar o valor no DataLayer (Google Analytics/GTM)
-            if (window.dataLayer) {{ 
-                for(var i=0; i<window.dataLayer.length; i++) {{ 
-                    if(window.dataLayer[i].transactionTotal) {{ val = window.dataLayer[i].transactionTotal; break; }}
-                    if(window.dataLayer[i].value) {{ val = window.dataLayer[i].value; break; }}
-                }} 
-            }}
-            
-            // Evita duplicidade de registro usando LocalStorage
-            var oid = window.location.href.split('/').pop(); // Pega ID do pedido da URL
-            if (!localStorage.getItem('venda_'+oid) && parseFloat(val) > 0) {{
-                fetch('{final_backend_url}/analytics/venda', {{ 
-                    method:'POST', 
-                    headers:{{'Content-Type':'application/json'}}, 
-                    body:JSON.stringify({{ 
-                        store_id:'{store_id}', 
-                        valor:val.toString(), 
-                        visitor_id: visitorId 
-                    }}) 
-                }});
-                localStorage.setItem('venda_'+oid, 'true');
-            }}
+        // --- BLOCO CRÍTICO: roda imediatamente no onload ---
+        try {{
+            trackVisit();              // primeira visita
+            if (isApp) {{ subscribePush(); }}  // registra SW + push só se for PWA
+        }} catch (e) {{
+            console.log('Critical block error:', e);
         }}
+
+        // --- BLOCO DEFERIDO: roda depois para aliviar o onload ---
+        setTimeout(function() {{
+            try {{
+                // 1) Rastreio SPA (MutationObserver)
+                try {{
+                    var oldHref = document.location.href;
+                    new MutationObserver(function() {{ 
+                        if (oldHref !== document.location.href) {{ 
+                            oldHref = document.location.href; 
+                            trackVisit(); 
+                        }} 
+                    }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
+                }} catch (e) {{}}
+
+                // 2) FAB (Botão Flutuante)
+                {fab_script}
+
+                // 3) Eventos de VARIANTE (LS.registerOnChangeVariant)
+                try {{
+                    if (window.LS && typeof LS.registerOnChangeVariant === 'function') {{
+                        LS.registerOnChangeVariant(function(variant) {{
+                            try {{
+                                var productId = null;
+                                var productName = null;
+
+                                try {{
+                                    if (LS.product) {{
+                                        productId = LS.product.id || null;
+                                        productName = LS.product.name || null;
+                                    }}
+                                }} catch (e) {{}}
+
+                                var payload = {{
+                                    store_id: '{store_id}',
+                                    visitor_id: visitorId,
+                                    product_id: productId ? String(productId) : '',
+                                    variant_id: variant && variant.id ? String(variant.id) : '',
+                                    variant_name: variant && variant.name ? String(variant.name) : productName || null,
+                                    price: variant && typeof variant.price !== 'undefined' ? String(variant.price) : null,
+                                    stock: variant && typeof variant.stock !== 'undefined' ? variant.stock : null
+                                }};
+
+                                if (!payload.variant_id) {{
+                                    return;
+                                }}
+
+                                fetch('{final_backend_url}/analytics/variant', {{
+                                    method: 'POST',
+                                    headers: {{ 'Content-Type': 'application/json' }},
+                                    body: JSON.stringify(payload)
+                                }});
+                            }} catch (err) {{
+                                console.log('Variant event error:', err);
+                            }}
+                        }});
+                    }}
+                }} catch (e) {{}}
+
+                // 4) RASTREIO DE VENDAS (Página de sucesso)
+                try {{
+                    if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
+                        var val = "0.00";
+                        
+                        // Tenta achar o valor no DataLayer (Google Analytics/GTM)
+                        if (window.dataLayer) {{ 
+                            for(var i=0; i<window.dataLayer.length; i++) {{ 
+                                if(window.dataLayer[i].transactionTotal) {{ val = window.dataLayer[i].transactionTotal; break; }}
+                                if(window.dataLayer[i].value) {{ val = window.dataLayer[i].value; break; }}
+                            }} 
+                        }}
+                        
+                        // Evita duplicidade de registro usando LocalStorage
+                        var oid = window.location.href.split('/').pop(); // Pega ID do pedido da URL
+                        if (!localStorage.getItem('venda_'+oid) && parseFloat(val) > 0) {{
+                            fetch('{final_backend_url}/analytics/venda', {{ 
+                                method:'POST', 
+                                headers:{{'Content-Type':'application/json'}}, 
+                                body:JSON.stringify({{ 
+                                    store_id:'{store_id}', 
+                                    valor:val.toString(), 
+                                    visitor_id: visitorId 
+                                }}) 
+                            }});
+                            localStorage.setItem('venda_'+oid, 'true');
+                        }}
+                    }}
+                }} catch (e) {{
+                    console.log('Venda tracking error:', e);
+                }}
+
+            }} catch (e) {{
+                console.log('Deferred block error:', e);
+            }}
+        }}, 800); // 800ms após onload para aliviar o caminho crítico
     }})();
     """
     
