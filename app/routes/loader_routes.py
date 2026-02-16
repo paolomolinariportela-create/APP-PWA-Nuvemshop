@@ -69,7 +69,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                             window.deferredPrompt = null;
                         }});
                     }} else {{
-                         alert("Para instalar:\\nAndroid: Menu > Adicionar à Tela\\niOS: Compartilhar > Adicionar à Tela");
+                         alert("Para instalar:\\\\nAndroid: Menu > Adicionar à Tela\\\\niOS: Compartilhar > Adicionar à Tela");
                     }}
                 }};
                 
@@ -168,8 +168,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         async function subscribePush() {{
             if ('serviceWorker' in navigator && publicVapidKey) {{
                 try {{
-                    // Registra o Service Worker
-                    const registration = await navigator.serviceWorker.register('{final_backend_url}/service-worker.js');
+                    // Registra o Service Worker via App Proxy, com escopo raiz
+                    const registration = await navigator.serviceWorker.register(
+                        '/apps/app-pwa/service-worker.js',
+                        {{ scope: '/' }}
+                    );
                     await navigator.serviceWorker.ready;
                     
                     // Tenta inscrever
