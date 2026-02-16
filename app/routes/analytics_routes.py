@@ -5,9 +5,9 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import VendaApp, VisitaApp
+from app.models import VendaApp, VisitaApp, VariantEvent
 from app.auth import get_current_store
-from app.security import validate_proxy_hmac  # novo import
+from app.security import validate_proxy_hmac
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -21,6 +21,21 @@ class VisitaPayload(BaseModel):
     pagina: str
     is_pwa: bool
     visitor_id: str
+    # Campos opcionais enriquecidos via LS
+    store_ls_id: str | None = None
+    product_id: str | None = None
+    product_name: str | None = None
+    cart_total: int | None = None
+    cart_items_count: int | None = None
+
+class VariantEventPayload(BaseModel):
+    store_id: str
+    visitor_id: str
+    product_id: str
+    variant_id: str
+    variant_name: str | None = None
+    price: str | None = None
+    stock: int | None = None
 
 @router.post("/visita")
 async def registrar_visita(
@@ -59,6 +74,28 @@ async def registrar_venda(
     db.commit()
     return {"status": "ok"}
 
+@router.post("/variant")
+async def registrar_variant_event(
+    payload: VariantEventPayload,
+    request: Request,
+    _valid=Depends(validate_proxy_hmac),
+    db: Session = Depends(get_db)
+):
+    db.add(
+        VariantEvent(
+            store_id=payload.store_id,
+            visitor_id=payload.visitor_id,
+            product_id=payload.product_id,
+            variant_id=payload.variant_id,
+            variant_name=payload.variant_name,
+            price=payload.price,
+            stock=payload.stock,
+            data=datetime.now().isoformat(),
+        )
+    )
+    db.commit()
+    return {"status": "ok"}
+
 @router.get("/dashboard")
 def get_dashboard_stats(
     store_id: str = Depends(get_current_store),
@@ -67,12 +104,14 @@ def get_dashboard_stats(
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
+
     visitantes_unicos = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(VisitaApp.store_id == store_id)
         .scalar()
         or 0
     )
+
     qtd_checkout = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
@@ -82,8 +121,10 @@ def get_dashboard_stats(
         .scalar()
         or 0
     )
+
     abandonos = max(0, qtd_checkout - qtd_vendas)
     ticket_medio = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
+
     subquery = (
         db.query(VendaApp.visitor_id)
         .filter(VendaApp.store_id == store_id)
@@ -92,7 +133,9 @@ def get_dashboard_stats(
         .subquery()
     )
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
+
     pageviews = db.query(VisitaApp).filter(VisitaApp.store_id == store_id).count()
+
     top_paginas = [
         p[0]
         for p in db.query(
@@ -116,7 +159,11 @@ def get_dashboard_stats(
             "tempo_medio": "--",
             "top_paginas": top_paginas,
         },
-        "funil": {"visitas": visitantes_unicos, "carrinho": qtd_checkout, "checkout": qtd_vendas},
+        "funil": {
+            "visitas": visitantes_unicos,
+            "carrinho": qtd_checkout,
+            "checkout": qtd_vendas,
+        },
         "recorrencia": {
             "clientes_2x": recorrentes,
             "taxa_recompra": round((recorrentes / max(1, qtd_vendas) * 100), 1),
