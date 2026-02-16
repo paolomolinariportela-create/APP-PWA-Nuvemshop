@@ -93,8 +93,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # 4. O Script Mágico Completo (Javascript Gerado)
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader Pro v4 (Analytics + Push + Widget)");
-        
+        console.log("🚀 PWA Loader Pro v4 (Analytics + Push + Widget + LS)");
+
         // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
         var visitorId = localStorage.getItem('pwa_v_id');
         if(!visitorId) {{ 
@@ -118,18 +118,51 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         meta.content = '{color}'; 
         document.head.appendChild(meta);
 
-        // --- C. ANALYTICS (Rastreio de Visitas) ---
+        // --- C. ANALYTICS (Rastreio de Visitas) COM LS ---
+        function buildVisitPayload() {{
+            var payload = {{
+                store_id: '{store_id}',
+                pagina: window.location.pathname,
+                is_pwa: isApp,
+                visitor_id: visitorId
+            }};
+
+            try {{
+                if (window.LS && LS.store) {{
+                    payload.store_ls_id = LS.store.id;
+                }}
+            }} catch (e) {{}}
+
+            try {{
+                if (window.LS && LS.product) {{
+                    payload.product_id = LS.product.id;
+                    if (LS.product.name) {{
+                        payload.product_name = LS.product.name;
+                    }}
+                }}
+            }} catch (e) {{}}
+
+            try {{
+                if (window.LS && LS.cart) {{
+                    if (typeof LS.cart.subtotal !== 'undefined') {{
+                        payload.cart_total = LS.cart.subtotal;
+                    }}
+                    if (Array.isArray(LS.cart.items)) {{
+                        payload.cart_items_count = LS.cart.items.length;
+                    }}
+                }}
+            }} catch (e) {{}}
+
+            return payload;
+        }}
+
         function trackVisit() {{
             try {{ 
+                var body = buildVisitPayload();
                 fetch('{final_backend_url}/analytics/visita', {{ 
                     method: 'POST', 
                     headers: {{'Content-Type': 'application/json'}}, 
-                    body: JSON.stringify({{ 
-                        store_id: '{store_id}', 
-                        pagina: window.location.pathname, 
-                        is_pwa: isApp, 
-                        visitor_id: visitorId 
-                    }}) 
+                    body: JSON.stringify(body) 
                 }}); 
             }} catch(e) {{ console.error("Erro Analytics:", e); }}
         }}
