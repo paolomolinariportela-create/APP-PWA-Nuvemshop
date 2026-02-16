@@ -166,4 +166,10 @@ def get_service_worker():
         event.waitUntil(clients.openWindow(event.notification.data.url));
     });
     """
-    return Response(content=js_content, media_type="application/javascript")
+    return Response(
+        content=js_content,
+        media_type="application/javascript",
+        headers={
+            "Service-Worker-Allowed": "/"
+        }
+    )
