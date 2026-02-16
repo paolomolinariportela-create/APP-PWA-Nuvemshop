@@ -174,6 +174,7 @@ async def get_service_worker(
         content=js_content,
         media_type="application/javascript",
         headers={
-            "Service-Worker-Allowed": "/"
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "public, max-age=3600"
         }
     )
