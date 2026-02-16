@@ -66,8 +66,7 @@ class PushSubscription(Base):
     
     created_at = Column(String)
 
-# Adicione no final do app/models.py
-
+# Histórico de Push
 class PushHistory(Base):
     __tablename__ = "push_history"
 
@@ -80,3 +79,16 @@ class PushHistory(Base):
     sent_count = Column(Integer, default=0) # Quantas pessoas receberam
     created_at = Column(String) # Data de envio (ISO Format)
 
+# Eventos de mudança de variante
+class VariantEvent(Base):
+    __tablename__ = "variant_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(String, index=True)
+    visitor_id = Column(String, index=True)
+    product_id = Column(String, index=True)
+    variant_id = Column(String, index=True)
+    variant_name = Column(String, nullable=True)
+    price = Column(String, nullable=True)  # mantendo string como em VendaApp
+    stock = Column(Integer, nullable=True)
+    data = Column(String)  # datetime em ISO
