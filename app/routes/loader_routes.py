@@ -31,6 +31,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     color = config.theme_color if config else "#000000"
 
+    # --- NOVAS CORES DA BOTTOM BAR (com defaults) ---
+    bottom_bar_bg = getattr(config, "bottom_bar_bg", "#FFFFFF") if config else "#FFFFFF"
+    bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
+
     fab_enabled = True  # FORÇAR LIGADO PARA TESTE
     fab_text = config.fab_text if (config and config.fab_text) else "Baixar App"
     fab_position = getattr(config, "fab_position", "right")
@@ -64,11 +68,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                         var steps = "";
                         if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha \\"Adicionar página a\\", depois \\"Tela inicial\\".\\n3. Confirme o nome do app e toque em \\"Adicionar\\".";
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha \\\\"Adicionar página a\\\\", depois \\\\"Tela inicial\\\\".\\\\n3. Confirme o nome do app e toque em \\\\"Adicionar\\\\".";
                         }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione \\"Adicionar à Tela de Início\\".\\n3. Confirme o nome do app e toque em \\"Adicionar\\".";
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione \\\\"Adicionar à Tela de Início\\\\".\\\\n3. Confirme o nome do app e toque em \\\\"Adicionar\\\\".";
                         }} else {{
-                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção \\"Instalar app\\" ou \\"Adicionar à Tela inicial\\".\\n3. Confirme para instalar o app no seu celular.";
+                            steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção \\\\"Instalar app\\\\" ou \\\\"Adicionar à Tela inicial\\\\".\\\\n3. Confirme para instalar o app no seu celular.";
                         }}
 
                         var modal = document.createElement('div');
@@ -134,6 +138,78 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }}, {fab_delay * 1000});
             }}
         """
+
+    # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
+    bottom_bar_script = f"""
+        function isPwaMode() {{
+            try {{
+                if (window.matchMedia) {{
+                    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+                    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+                    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+                }}
+                if (window.navigator.standalone === true) return true; // iOS
+            }} catch (e) {{}}
+            return false;
+        }}
+
+        function initBottomBar() {{
+            try {{
+                if (!isPwaMode()) return;
+                if (window.innerWidth > 900) return;
+                if (document.getElementById('pwa-bottom-nav')) return;
+
+                var bar = document.createElement('nav');
+                bar.id = 'pwa-bottom-nav';
+                bar.style.cssText = `
+                    position:fixed;
+                    bottom:0;
+                    left:0;
+                    right:0;
+                    height:64px;
+                    background:{bottom_bar_bg};
+                    border-top:1px solid #e5e7eb;
+                    display:flex;
+                    justify-content:space-around;
+                    align-items:center;
+                    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+                    z-index:2147483647;
+                    padding-bottom: env(safe-area-inset-bottom, 0);
+                `;
+
+                function createItem(icon, label, href) {{
+                    var btn = document.createElement('button');
+                    btn.style.cssText = `
+                        background:none;
+                        border:none;
+                        display:flex;
+                        flex-direction:column;
+                        align-items:center;
+                        font-size:10px;
+                        color:{bottom_bar_icon_color};
+                        cursor:pointer;
+                    `;
+                    btn.onclick = function() {{
+                        try {{
+                            if (href) window.location.href = href;
+                        }} catch (e) {{}}
+                    }};
+                    btn.innerHTML = "<span style='font-size:18px;margin-bottom:2px;'>" + icon + "</span><span>" + label + "</span>";
+                    return btn;
+                }}
+
+                // Ajuste os hrefs para as rotas reais do app da loja
+                bar.appendChild(createItem("🏠", "Início", "/"));
+                bar.appendChild(createItem("🛒", "Catálogo", "/produtos"));
+                bar.appendChild(createItem("🔔", "Alertas", "/notificacoes"));
+                bar.appendChild(createItem("👤", "Conta", "/minha-conta"));
+
+                document.body.appendChild(bar);
+            }} catch (e) {{
+                console.log('Bottom bar error:', e);
+            }}
+        }}
+    """
 
     js = f"""
     (function() {{
@@ -465,6 +541,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }}
                 initVariantTracking();
                 initSalesTracking();
+
+                {bottom_bar_script}
+                if (typeof initBottomBar === 'function') {{
+                    initBottomBar();
+                }}
             }} catch (e) {{
                 console.log('Deferred block error:', e);
             }}
