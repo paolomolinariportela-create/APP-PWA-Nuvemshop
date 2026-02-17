@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, desc
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional, Union
 
 from app.database import get_db
 from app.models import VendaApp, VisitaApp, VariantEvent
@@ -25,12 +26,11 @@ class VisitaPayload(BaseModel):
     pagina: str
     is_pwa: bool
     visitor_id: str
-    store_ls_id: str | None = None
-    product_id: str | None = None
-    product_name: str | None = None
-    cart_total: int | None = None
-    cart_items_count: int | None = None
-
+    store_ls_id: Optional[str] = None
+    product_id: Optional[str] = None
+    product_name: Optional[str] = None
+    cart_total: Optional[Union[int, float, str]] = None
+    cart_items_count: Optional[int] = None
 
 class VariantEventPayload(BaseModel):
     store_id: str
