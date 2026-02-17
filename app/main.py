@@ -42,14 +42,16 @@ def ensure_app_config_table_and_columns():
         );
     """)
 
-    # 2) Colunas que queremos garantir
+    # 2) Colunas que queremos garantir (ATUALIZADO COM A BOTTOM BAR)
     desired_columns = {
         "fab_position": "VARCHAR",
         "fab_icon": "VARCHAR",
         "fab_animation": "BOOLEAN DEFAULT TRUE",
         "fab_delay": "INTEGER DEFAULT 0",
         "fab_enabled": "BOOLEAN DEFAULT FALSE",
-        "fab_text": "VARCHAR DEFAULT 'Baixar App'"
+        "fab_text": "VARCHAR DEFAULT 'Baixar App'",
+        "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
+        "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'"
     }
 
     # 3) Colunas existentes hoje
