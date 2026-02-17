@@ -26,8 +26,8 @@ class VisitaPayload(BaseModel):
     pagina: str
     is_pwa: bool
     visitor_id: str
-    store_ls_id: Optional[str] = None
-    product_id: Optional[str] = None
+    store_ls_id: Optional[Union[str, int]] = None
+    product_id: Optional[Union[str, int]] = None
     product_name: Optional[str] = None
     cart_total: Optional[Union[int, float, str]] = None
     cart_items_count: Optional[int] = None
