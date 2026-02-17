@@ -20,8 +20,8 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
 
     # Fallbacks seguros
     app_name = config.app_name if config else "Minha Loja"
-    theme_color = config.theme_color if config else "#000000"
-    background_color = "#ffffff"
+    theme_color = config.theme_color if (config and config.theme_color) else "#000000"
+    background_color = theme_color  # usa a mesma cor do tema como fundo
     
     icon_src = (
         config.logo_url
