@@ -1,5 +1,4 @@
 import os
-import json
 from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -8,12 +7,10 @@ from app.models import AppConfig
 router = APIRouter()
 
 # --- CONFIGURAÇÕES DE AMBIENTE ---
-# Detecta a URL do backend automaticamente (seja local ou Railway/Render)
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
 
-# Chave VAPID Pública para o Frontend (Necessária para Push Notifications)
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
 
@@ -24,31 +21,25 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     Uso no frontend da loja: <script src="https://seu-api.com/loader.js?store_id=123"></script>
     """
 
-    # 1. Garante que temos uma URL válida para o backend
-    # Se a variável de ambiente falhar, tenta pegar do próprio request (fallback seguro)
     final_backend_url = BACKEND_URL or str(request.base_url).rstrip("/")
 
-    # 2. Busca Configurações da Loja no Banco de Dados
     try:
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     except Exception as e:
         print(f"Erro ao buscar config: {e}")
         config = None
 
-    # Define valores padrão caso a loja não tenha configurado ainda
     color = config.theme_color if config else "#000000"
 
-    # Configurações do Widget (Botão Flutuante)
     fab_enabled = True  # FORÇAR LIGADO PARA TESTE
     fab_text = config.fab_text if config and config.fab_text else "Baixar App"
     fab_position = getattr(config, "fab_position", "right")
     fab_icon = getattr(config, "fab_icon", "📲")
     fab_delay = getattr(config, "fab_delay", 0)
 
-    # CSS Dinâmico da Posição do FAB
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
-    # Script do Botão Flutuante (FAB) – será executado no bloco deferido
+    # Script do Botão Flutuante (FAB) – com modal simples de instruções
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -56,9 +47,46 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     setTimeout(function() {{
                         var fab = document.createElement('div');
                         fab.id = 'pwa-fab-btn';
-                        // Estilos inline para garantir que nenhum CSS da loja quebre o botão
                         fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{color}; color:white; padding:12px 24px; border-radius:50px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; transition: all 0.3s ease;";
                         fab.innerHTML = "<span style='font-size:18px'>{fab_icon}</span> <span>{fab_text}</span>";
+
+                        // Função de modal de instruções (fallback para navegadores sem prompt)
+                        function showInstallHelpModal() {{
+                            var existing = document.getElementById('pwa-install-modal');
+                            if (existing) existing.remove();
+
+                            var ua = navigator.userAgent || "";
+                            var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
+                            var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
+
+                            var steps = "";
+                            if (isSamsung) {{
+                                steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha \\"Adicionar página a\\", depois \\"Tela inicial\\".\\\\n3. Confirme o nome do app e toque em \\"Adicionar\\".";
+                            }} else if (isSafari) {{
+                                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione \\"Adicionar à Tela de Início\\".\\\\n3. Confirme o nome do app e toque em \\"Adicionar\\".";
+                            }} else {{
+                                steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção \\"Instalar app\\" ou \\"Adicionar à Tela inicial\\".\\\\n3. Confirme para instalar o app no seu celular.";
+                            }}
+
+                            var modal = document.createElement('div');
+                            modal.id = 'pwa-install-modal';
+                            modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
+
+                            var box = document.createElement('div');
+                            box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
+
+                            box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
+                                            "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
+                                            "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
+                                            "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
+
+                            modal.appendChild(box);
+                            document.body.appendChild(modal);
+
+                            document.getElementById('pwa-install-modal-close').onclick = function() {{
+                                modal.remove();
+                            }};
+                        }}
 
                         // Ação de Clique
                         fab.onclick = function() {{
@@ -81,15 +109,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                                     window.deferredPrompt = null;
                                 }});
                             }} else {{
-                                 alert("Para instalar:\\nAndroid: Menu > Adicionar à Tela\\niOS: Compartilhar > Adicionar à Tela");
+                                showInstallHelpModal();
                             }}
                         }};
 
-                        // Animação de Entrada
                         fab.animate([{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}], {{ duration: 500, easing: 'ease-out' }});
                         document.body.appendChild(fab);
 
-                        // Efeito 'Pulse' a cada 5 segundos para chamar atenção
                         setInterval(() => {{
                             fab.animate([
                                 {{ transform: 'scale(1)' }},
@@ -98,39 +124,35 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                             ], {{ duration: 1000 }});
                         }}, 5000);
 
-                    }}, {fab_delay * 1000}); // Aplica o delay configurado
+                    }}, {fab_delay * 1000});
                 }}
         """
 
-    # 4. Script completo (bloco crítico + bloco deferido)
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v4 (Analytics + Push + Widget + LS)");
 
-        // --- A. IDENTIFICAÇÃO DO USUÁRIO (CRÍTICO) ---
+        // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
         var visitorId = localStorage.getItem('pwa_v_id');
         if(!visitorId) {{
             visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
             localStorage.setItem('pwa_v_id', visitorId);
         }}
 
-        // Detecta se está rodando como APP ou no Navegador (CRÍTICO)
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
-        // --- B. INJEÇÃO DE METADADOS (CRÍTICO) ---
-        // Injeta o Manifest.json dinâmico
+        // --- B. METADADOS ---
         var link = document.createElement('link');
         link.rel = 'manifest';
         link.href = '{final_backend_url}/manifest/{store_id}.json';
         document.head.appendChild(link);
 
-        // Injeta a Cor do Tema no navegador
         var meta = document.createElement('meta');
         meta.name = 'theme-color';
         meta.content = '{color}';
         document.head.appendChild(meta);
 
-        // --- C. ANALYTICS (CRÍTICO: PRIMEIRA VISITA) ---
+        // --- C. ANALYTICS ---
         function buildVisitPayload() {{
             var payload = {{
                 store_id: '{store_id}',
@@ -179,14 +201,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch(e) {{ console.error("Erro Analytics:", e); }}
         }}
 
-        // --- D. INSTALAÇÃO (CRÍTICO: captura do beforeinstallprompt) ---
+        // --- D. INSTALAÇÃO ---
         window.deferredPrompt = null;
         window.addEventListener('beforeinstallprompt', (e) => {{
             e.preventDefault();
             window.deferredPrompt = e;
         }});
 
-        // --- E. PUSH NOTIFICATIONS (CRÍTICO: registro SW + inscrição) ---
+        // --- E. PUSH ---
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
@@ -201,20 +223,17 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         async function subscribePush() {{
             if ('serviceWorker' in navigator && publicVapidKey) {{
                 try {{
-                    // Registra o Service Worker via App Proxy, com escopo raiz
                     const registration = await navigator.serviceWorker.register(
                         '/apps/app-pwa/service-worker.js',
                         {{ scope: '/' }}
                     );
                     await navigator.serviceWorker.ready;
 
-                    // Tenta inscrever
                     const subscription = await registration.pushManager.subscribe({{
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                     }});
 
-                    // Envia inscrição para o Backend
                     await fetch('{final_backend_url}/push/subscribe', {{
                         method: 'POST',
                         body: JSON.stringify({{
@@ -231,18 +250,18 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // --- BLOCO CRÍTICO: roda imediatamente no onload ---
+        // --- BLOCO CRÍTICO ---
         try {{
-            trackVisit();              // primeira visita
-            if (isApp) {{ subscribePush(); }}  // registra SW + push só se for PWA
+            trackVisit();
+            if (isApp) {{ subscribePush(); }}
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
 
-        // --- BLOCO DEFERIDO: roda depois para aliviar o onload ---
+        // --- BLOCO DEFERIDO ---
         setTimeout(function() {{
             try {{
-                // 1) Rastreio SPA (MutationObserver)
+                // SPA tracking
                 try {{
                     var oldHref = document.location.href;
                     new MutationObserver(function() {{
@@ -253,10 +272,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
                 }} catch (e) {{}}
 
-                // 2) FAB (Botão Flutuante)
+                // FAB
                 {fab_script}
 
-                // 3) Eventos de VARIANTE (LS.registerOnChangeVariant)
+                // Eventos de VARIANTE
                 try {{
                     if (window.LS && typeof LS.registerOnChangeVariant === 'function') {{
                         LS.registerOnChangeVariant(function(variant) {{
@@ -297,12 +316,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}
                 }} catch (e) {{}}
 
-                // 4) RASTREIO DE VENDAS (Página de sucesso)
+                // RASTREIO DE VENDAS
                 try {{
                     if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
                         var val = "0.00";
 
-                        // Tenta achar o valor no DataLayer (Google Analytics/GTM)
                         if (window.dataLayer) {{
                             for(var i=0; i<window.dataLayer.length; i++) {{
                                 if(window.dataLayer[i].transactionTotal) {{ val = window.dataLayer[i].transactionTotal; break; }}
@@ -310,8 +328,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                             }}
                         }}
 
-                        // Evita duplicidade de registro usando LocalStorage
-                        var oid = window.location.href.split('/').pop(); // Pega ID do pedido da URL
+                        var oid = window.location.href.split('/').pop();
                         if (!localStorage.getItem('venda_'+oid) && parseFloat(val) > 0) {{
                             fetch('{final_backend_url}/analytics/venda', {{
                                 method:'POST',
@@ -332,7 +349,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch (e) {{
                 console.log('Deferred block error:', e);
             }}
-        }}, 800); // 800ms após onload para aliviar o caminho crítico
+        }}, 800);
     }})();
     """
 
