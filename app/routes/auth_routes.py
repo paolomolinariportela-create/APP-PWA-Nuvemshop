@@ -72,10 +72,12 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
     print("❌ Todas as tentativas de criar página falharam.")
 
 
-# --- FUNÇÃO AUXILIAR: INJETA SCRIPT ---
+# --- FUNÇÃO AUXILIAR: INJETA SCRIPT (NÃO USADA QUANDO HÁ SCRIPT AUTO INSTALADO) ---
 def inject_script_tag(store_id: str, access_token: str):
     """
     Injeta o loader.js na loja (ScriptTag).
+    Mantida para uso futuro, mas NÃO chamada no callback,
+    pois o script APP-PWA já é auto instalado pela Nuvemshop.
     """
     url = f"https://api.tiendanube.com/v1/{store_id}/scripts"
     
@@ -85,14 +87,12 @@ def inject_script_tag(store_id: str, access_token: str):
         "User-Agent": "AppBuilder (Builder)"
     }
     
-    # IMPORTANTE: passa o store_id na query string
     payload = {
         "src": f"{BACKEND_URL}/loader.js?store_id={store_id}",
         "event": "onload"
     }
     
     try:
-        # Verifica scripts existentes para não duplicar
         check = requests.get(url, headers=headers)
         if check.status_code == 200:
             scripts = check.json()
@@ -103,7 +103,6 @@ def inject_script_tag(store_id: str, access_token: str):
                         return
 
         res = requests.post(url, json=payload, headers=headers)
-        # Se a API antiga falhar com 404, tenta domínio nuvemshop.com.br como fallback
         if res.status_code == 404:
             print("⚠️ Script URL tiendanube falhou. Tentando nuvemshop.com.br...")
             url_alt = f"https://api.nuvemshop.com.br/v1/{store_id}/scripts"
@@ -222,7 +221,8 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         # 4. Executa Serviços (Página e Scripts)
         print("🚀 Executando configuração pós-install...")
         create_landing_page_internal(store_id, raw_token, "#000000")
-        inject_script_tag(store_id, raw_token)
+        # NÃO chama inject_script_tag aqui, pois o script APP-PWA já é auto instalado
+        # inject_script_tag(store_id, raw_token)
 
         # 5. Redireciona para o Painel
         jwt = create_jwt_token(store_id)
