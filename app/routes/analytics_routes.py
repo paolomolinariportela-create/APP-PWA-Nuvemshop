@@ -11,6 +11,8 @@ from app.security import validate_proxy_hmac
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+# ----- PAYLOADS -----
+
 class VendaPayload(BaseModel):
     store_id: str
     valor: str
@@ -21,7 +23,6 @@ class VisitaPayload(BaseModel):
     pagina: str
     is_pwa: bool
     visitor_id: str
-    # Campos opcionais enriquecidos via LS
     store_ls_id: str | None = None
     product_id: str | None = None
     product_name: str | None = None
@@ -36,6 +37,12 @@ class VariantEventPayload(BaseModel):
     variant_name: str | None = None
     price: str | None = None
     stock: int | None = None
+
+class InstallPayload(BaseModel):
+    store_id: str
+    visitor_id: str
+
+# ----- ENDPOINTS DE REGISTRO -----
 
 @router.post("/visita")
 async def registrar_visita(
@@ -56,6 +63,7 @@ async def registrar_visita(
     db.commit()
     return {"status": "ok"}
 
+
 @router.post("/venda")
 async def registrar_venda(
     payload: VendaPayload,
@@ -73,6 +81,7 @@ async def registrar_venda(
     )
     db.commit()
     return {"status": "ok"}
+
 
 @router.post("/variant")
 async def registrar_variant_event(
@@ -95,6 +104,32 @@ async def registrar_variant_event(
     )
     db.commit()
     return {"status": "ok"}
+
+
+@router.post("/install")
+async def registrar_install(
+    payload: InstallPayload,
+    request: Request,
+    _valid=Depends(validate_proxy_hmac),
+    db: Session = Depends(get_db)
+):
+    """
+    Marca explicitamente uma instalação de app.
+    Para manter compatibilidade, gravamos como uma visita 'install' em modo PWA.
+    """
+    db.add(
+        VisitaApp(
+            store_id=payload.store_id,
+            pagina="install",
+            is_pwa=True,
+            visitor_id=payload.visitor_id,
+            data=datetime.now().isoformat()
+        )
+    )
+    db.commit()
+    return {"status": "ok"}
+
+# ----- DASHBOARD -----
 
 @router.get("/dashboard")
 def get_dashboard_stats(
