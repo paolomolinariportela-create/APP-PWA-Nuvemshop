@@ -177,7 +177,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     padding-bottom: env(safe-area-inset-bottom, 0);
                 `;
 
-                function createItem(icon, label, href) {{
+                function createItem(label, href) {{
                     var btn = document.createElement('button');
                     btn.style.cssText = `
                         background:none;
@@ -185,24 +185,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         display:flex;
                         flex-direction:column;
                         align-items:center;
-                        font-size:10px;
+                        font-size:11px;
                         color:{bottom_bar_icon_color};
                         cursor:pointer;
+                        font-weight:600;
+                        text-transform:uppercase;
+                        letter-spacing:0.04em;
                     `;
                     btn.onclick = function() {{
                         try {{
                             if (href) window.location.href = href;
                         }} catch (e) {{}}
                     }};
-                    btn.innerHTML = "<span style='font-size:18px;margin-bottom:2px;'>" + icon + "</span><span>" + label + "</span>";
+                    btn.textContent = label;
                     return btn;
                 }}
 
-                // Ajuste os hrefs para as rotas reais do app da loja
-                bar.appendChild(createItem("🏠", "Início", "/"));
-                bar.appendChild(createItem("🛒", "Catálogo", "/produtos"));
-                bar.appendChild(createItem("🔔", "Alertas", "/notificacoes"));
-                bar.appendChild(createItem("👤", "Conta", "/minha-conta"));
+                bar.appendChild(createItem("Início", "/"));
+                bar.appendChild(createItem("Loja", "/produtos"));
+                bar.appendChild(createItem("Alertas", "/notificacoes"));
+                bar.appendChild(createItem("Conta", "/minha-conta"));
 
                 document.body.appendChild(bar);
             }} catch (e) {{
