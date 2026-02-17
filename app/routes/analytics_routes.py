@@ -7,16 +7,18 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import VendaApp, VisitaApp, VariantEvent
 from app.auth import get_current_store
-from app.security import validate_proxy_hmac
+# from app.security import validate_proxy_hmac  # não usado nas rotas chamadas pelo browser
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 # ----- PAYLOADS -----
 
+
 class VendaPayload(BaseModel):
     store_id: str
     valor: str
     visitor_id: str
+
 
 class VisitaPayload(BaseModel):
     store_id: str
@@ -29,6 +31,7 @@ class VisitaPayload(BaseModel):
     cart_total: int | None = None
     cart_items_count: int | None = None
 
+
 class VariantEventPayload(BaseModel):
     store_id: str
     visitor_id: str
@@ -38,18 +41,20 @@ class VariantEventPayload(BaseModel):
     price: str | None = None
     stock: int | None = None
 
+
 class InstallPayload(BaseModel):
     store_id: str
     visitor_id: str
 
-# ----- ENDPOINTS DE REGISTRO -----
+
+# ----- ENDPOINTS DE REGISTRO (chamados pelo loader.js, sem HMAC) -----
+
 
 @router.post("/visita")
 async def registrar_visita(
     payload: VisitaPayload,
     request: Request,
-    _valid=Depends(validate_proxy_hmac),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.add(
         VisitaApp(
@@ -57,7 +62,7 @@ async def registrar_visita(
             pagina=payload.pagina,
             is_pwa=payload.is_pwa,
             visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat()
+            data=datetime.now().isoformat(),
         )
     )
     db.commit()
@@ -68,15 +73,14 @@ async def registrar_visita(
 async def registrar_venda(
     payload: VendaPayload,
     request: Request,
-    _valid=Depends(validate_proxy_hmac),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.add(
         VendaApp(
             store_id=payload.store_id,
             valor=payload.valor,
             visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat()
+            data=datetime.now().isoformat(),
         )
     )
     db.commit()
@@ -87,8 +91,7 @@ async def registrar_venda(
 async def registrar_variant_event(
     payload: VariantEventPayload,
     request: Request,
-    _valid=Depends(validate_proxy_hmac),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.add(
         VariantEvent(
@@ -110,8 +113,7 @@ async def registrar_variant_event(
 async def registrar_install(
     payload: InstallPayload,
     request: Request,
-    _valid=Depends(validate_proxy_hmac),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Marca explicitamente uma instalação de app.
@@ -123,21 +125,23 @@ async def registrar_install(
             pagina="install",
             is_pwa=True,
             visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat()
+            data=datetime.now().isoformat(),
         )
     )
     db.commit()
     return {"status": "ok"}
 
+
 # ----- DASHBOARD -----
+
 
 @router.get("/dashboard")
 def get_dashboard_stats(
     store_id: str = Depends(get_current_store),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
-    total_receita = sum([float(v.valor) for v in vendas])
+    total_receita = sum(float(v.valor) for v in vendas)
     qtd_vendas = len(vendas)
 
     visitantes_unicos = (
@@ -151,7 +155,10 @@ def get_dashboard_stats(
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
             VisitaApp.store_id == store_id,
-            (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho")),
+            (
+                VisitaApp.pagina.contains("checkout")
+                | VisitaApp.pagina.contains("carrinho")
+            ),
         )
         .scalar()
         or 0
@@ -201,11 +208,17 @@ def get_dashboard_stats(
         },
         "recorrencia": {
             "clientes_2x": recorrentes,
-            "taxa_recompra": round((recorrentes / max(1, qtd_vendas) * 100), 1),
+            "taxa_recompra": round(
+                (recorrentes / max(1, qtd_vendas) * 100),
+                1,
+            ),
         },
         "ticket_medio": {"app": round(ticket_medio, 2), "site": 0.0},
         "taxa_conversao": {
-            "app": round((qtd_vendas / max(1, visitantes_unicos) * 100), 1),
+            "app": round(
+                (qtd_vendas / max(1, visitantes_unicos) * 100),
+                1,
+            ),
             "site": 0.0,
         },
         "economia_ads": visitantes_unicos * 0.50,
