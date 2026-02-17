@@ -45,7 +45,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_delay = getattr(config, "fab_delay", 0)
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
-    # Script do Botão Flutuante (FAB), agora encapsulado em função
+    # Script do Botão Flutuante (FAB), agora encapsulado em função (CORRIGIDO)
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -68,11 +68,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                         var steps = "";
                         if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha \\\\"Adicionar página a\\\\", depois \\\\"Tela inicial\\\\".\\\\n3. Confirme o nome do app e toque em \\\\"Adicionar\\\\".";
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione \\\\"Adicionar à Tela de Início\\\\".\\\\n3. Confirme o nome do app e toque em \\\\"Adicionar\\\\".";
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else {{
-                            steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção \\\\"Instalar app\\\\" ou \\\\"Adicionar à Tela inicial\\\\".\\\\n3. Confirme para instalar o app no seu celular.";
+                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
                         }}
 
                         var modal = document.createElement('div');
