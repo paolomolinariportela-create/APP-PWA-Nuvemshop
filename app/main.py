@@ -5,8 +5,82 @@ from fastapi.staticfiles import StaticFiles
 
 # --- IMPORTS INTERNOS ---
 from app.database import engine, Base
-# Importamos as rotas (Modularizadas)
-# Nota: stats_routes foi removido pois foi dividido em loader, push e analytics
+
+# --- MIGRAÇÃO SIMPLES DO app_config ---
+import psycopg2
+from psycopg2 import sql
+
+def get_db_url():
+    # Ajuste os nomes se seu projeto usar outra variável no Railway
+    return (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+        or os.environ.get("PGDATABASE_URL")
+    )
+
+def ensure_app_config_table_and_columns():
+    db_url = get_db_url()
+    if not db_url:
+        print("[DB MIGRATION] DATABASE_URL não encontrado nas variáveis de ambiente.")
+        return
+
+    conn = psycopg2.connect(db_url)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    print("[DB MIGRATION] Verificando tabela app_config...")
+
+    # 1) Garante que a tabela app_config exista (ajuste campos básicos se necessário)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS app_config (
+            id SERIAL PRIMARY KEY,
+            store_id VARCHAR(255) NOT NULL,
+            app_name VARCHAR(255),
+            theme_color VARCHAR(50),
+            logo_url TEXT,
+            whatsapp_number VARCHAR(50)
+        );
+    """)
+
+    # 2) Colunas que queremos garantir
+    desired_columns = {
+        "fab_position": "VARCHAR",
+        "fab_icon": "VARCHAR",
+        "fab_animation": "BOOLEAN DEFAULT TRUE",
+        "fab_delay": "INTEGER DEFAULT 0",
+        "fab_enabled": "BOOLEAN DEFAULT FALSE",
+        "fab_text": "VARCHAR DEFAULT 'Baixar App'"
+    }
+
+    # 3) Colunas existentes hoje
+    cur.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'app_config'
+          AND table_schema = 'public';
+    """)
+    existing_cols = {row[0] for row in cur.fetchall()}
+
+    # 4) Cria só o que estiver faltando
+    for col_name, col_type in desired_columns.items():
+        if col_name not in existing_cols:
+            alter_stmt = sql.SQL("ALTER TABLE app_config ADD COLUMN {name} {ctype};").format(
+                name=sql.Identifier(col_name),
+                ctype=sql.SQL(col_type)
+            )
+            print(f"[DB MIGRATION] Adicionando coluna: {col_name} ({col_type})")
+            try:
+                cur.execute(alter_stmt)
+            except Exception as e:
+                print(f"[DB MIGRATION] Erro ao adicionar coluna {col_name}: {e}")
+        else:
+            print(f"[DB MIGRATION] Coluna já existe: {col_name}")
+
+    cur.close()
+    conn.close()
+    print("[DB MIGRATION] app_config OK.")
+
+# --- IMPORT DAS ROTAS ---
 from app.routes import (
     auth_routes, 
     admin_routes, 
@@ -16,7 +90,10 @@ from app.routes import (
     pwa_routes
 )
 
-# Inicializa as tabelas do Banco de Dados
+# 1) Roda a migração simples antes de criar as tabelas do SQLAlchemy
+ensure_app_config_table_and_columns()
+
+# 2) Inicializa as tabelas do Banco de Dados gerenciadas pelo SQLAlchemy
 Base.metadata.create_all(bind=engine)
 
 # Cria a aplicação FastAPI
@@ -53,8 +130,6 @@ app.include_router(push_routes.router)
 app.include_router(analytics_routes.router)
 
 # 3. Arquivos do PWA (Manifest, Service Worker)
-# Prefixo /pwa ou raiz, dependendo de como definiu no pwa_routes. 
-# Geralmente manifest e sw ficam na raiz ou em /pwa. Vamos manter sem prefixo se o arquivo pwa_routes já tiver os caminhos certos.
 app.include_router(pwa_routes.router, tags=["PWA"])
 
 
@@ -77,5 +152,3 @@ if frontend_path:
     print(f"✅ Frontend servido de: {frontend_path}")
 else:
     print("⚠️ Aviso: Pasta do Frontend não encontrada (API rodando em modo headless)")
-
-# Fim do arquivo main.py
