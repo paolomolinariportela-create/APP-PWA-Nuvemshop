@@ -250,10 +250,92 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
+        // --- PERMISSÃO DE NOTIFICAÇÃO DENTRO DO APP ---
+        function checkNotificationPermission() {{
+            if (!('Notification' in window)) {{
+                return 'unsupported';
+            }}
+            return Notification.permission; // 'default' | 'granted' | 'denied'
+        }}
+
+        async function askNotificationAndSubscribe() {{
+            if (!('Notification' in window)) return;
+
+            const current = Notification.permission;
+
+            if (current === 'granted') {{
+                subscribePush();
+                return;
+            }}
+
+            if (current === 'denied') {{
+                alert('As notificações estão bloqueadas neste dispositivo. Ative nas configurações do navegador para receber atualizações.');
+                return;
+            }}
+
+            const result = await Notification.requestPermission();
+            if (result === 'granted') {{
+                subscribePush();
+            }} else {{
+                console.log('Permissão de notificação não concedida:', result);
+            }}
+        }}
+
+        function showNotificationTopBar() {{
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'granted') return;
+
+            var existingBar = document.getElementById('pwa-notification-bar');
+            if (existingBar) return;
+
+            var bar = document.createElement('div');
+            bar.id = 'pwa-notification-bar';
+            bar.style.cssText = `
+                position:fixed;
+                top:0;
+                left:0;
+                right:0;
+                z-index:2147483647;
+                background:#111827;
+                color:#F9FAFB;
+                padding:10px 14px;
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                font-family:sans-serif;
+                font-size:13px;
+                box-shadow:0 2px 8px rgba(0,0,0,0.35);
+            `;
+
+            bar.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:16px;">🔔</span>
+                  <span>Ative as notificações para receber atualizações de pedidos, cupons e novidades.</span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button id="pwa-notif-allow" style="padding:6px 10px; border-radius:6px; border:none; background:#22C55E; color:#fff; font-weight:bold; font-size:12px; cursor:pointer;">Ativar</button>
+                  <button id="pwa-notif-close" style="padding:6px 8px; border-radius:6px; border:none; background:transparent; color:#9CA3AF; font-size:12px; cursor:pointer;">Agora não</button>
+                </div>
+            `;
+
+            document.body.appendChild(bar);
+
+            document.getElementById('pwa-notif-allow').onclick = function () {{
+                askNotificationAndSubscribe();
+                bar.remove();
+            }};
+
+            document.getElementById('pwa-notif-close').onclick = function () {{
+                bar.remove();
+            }};
+        }}
+
         // --- BLOCO CRÍTICO ---
         try {{
             trackVisit();
-            if (isApp) {{ subscribePush(); }}
+            if (isApp) {{
+                showNotificationTopBar();
+            }}
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
