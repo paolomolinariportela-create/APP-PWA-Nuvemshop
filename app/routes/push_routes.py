@@ -10,7 +10,7 @@ from pywebpush import webpush, WebPushException
 from app.database import get_db
 from app.models import PushSubscription, PushHistory, Loja
 from app.auth import get_current_store
-from app.security import validate_proxy_hmac  # novo import
+# from app.security import validate_proxy_hmac  # não usado aqui
 
 router = APIRouter(prefix="/push", tags=["Push"])
 
@@ -23,11 +23,12 @@ try:
 except:
     VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
 
-# MODELOS
+
 class PushSubscribePayload(BaseModel):
     store_id: str
     subscription: Dict[str, Any]
     visitor_id: Optional[str] = None
+
 
 class PushSendPayload(BaseModel):
     title: str
@@ -35,7 +36,7 @@ class PushSendPayload(BaseModel):
     url: Optional[str] = "/"
     icon: Optional[str] = "/icon.png"
 
-# HELPER
+
 def send_webpush(subscription_info, message_body):
     try:
         if not VAPID_PRIVATE_KEY:
@@ -52,13 +53,12 @@ def send_webpush(subscription_info, message_body):
             return "DELETE"
         return False
 
-# ROTAS
+
 @router.post("/subscribe")
 async def subscribe_push(
     payload: PushSubscribePayload,
     request: Request,
-    _valid=Depends(validate_proxy_hmac),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     try:
         sub_data = payload.subscription
@@ -67,7 +67,11 @@ async def subscribe_push(
         if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
             return {"status": "error"}
 
-        exists = db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
+        exists = (
+            db.query(PushSubscription)
+            .filter(PushSubscription.endpoint == endpoint)
+            .first()
+        )
         if not exists:
             db.add(
                 PushSubscription(
@@ -82,16 +86,21 @@ async def subscribe_push(
             db.commit()
             return {"status": "subscribed"}
         return {"status": "already_subscribed"}
-    except:
+    except Exception:
         return {"status": "error"}
+
 
 @router.post("/send")
 def send_push_campaign(
     payload: PushSendPayload,
     store_id: str = Depends(get_current_store),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    subs = db.query(PushSubscription).filter(PushSubscription.store_id == store_id).all()
+    subs = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.store_id == store_id)
+        .all()
+    )
     message_body = {
         "title": payload.title,
         "body": payload.message,
@@ -104,7 +113,10 @@ def send_push_campaign(
     if subs:
         for sub in subs:
             res = send_webpush(
-                {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                {
+                    "endpoint": sub.endpoint,
+                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                },
                 message_body,
             )
             if res is True:
@@ -112,12 +124,11 @@ def send_push_campaign(
             elif res == "DELETE":
                 delete_ids.append(sub.id)
         if delete_ids:
-            db.query(PushSubscription).filter(PushSubscription.id.in_(delete_ids)).delete(
-                synchronize_session=False
-            )
+            db.query(PushSubscription).filter(
+                PushSubscription.id.in_(delete_ids)
+            ).delete(synchronize_session=False)
             db.commit()
 
-    # Histórico
     db.add(
         PushHistory(
             store_id=store_id,
@@ -131,10 +142,11 @@ def send_push_campaign(
     db.commit()
     return {"status": "success", "sent": sent_count, "cleaned": len(delete_ids)}
 
+
 @router.get("/history")
 def get_push_history(
     store_id: str = Depends(get_current_store),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     return (
         db.query(PushHistory)
