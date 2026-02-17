@@ -38,12 +38,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     color = config.theme_color if config else "#000000"
     
     # Configurações do Widget (Botão Flutuante)
-    fab_enabled = config.fab_enabled if config else False
-    fab_text = config.fab_text if config else "Baixar App"
-    fab_position = getattr(config, 'fab_position', 'right') # default: direita
-    fab_icon = getattr(config, 'fab_icon', '📲')           # default: celular
-    fab_delay = getattr(config, 'fab_delay', 0)            # default: 0 segundos
-
+    fab_enabled = True  # FORÇAR LIGADO PARA TESTE
+    fab_text = config.fab_text if config and config.fab_text else "Baixar App"
+    fab_position = getattr(config, 'fab_position', 'right')
+    fab_icon = getattr(config, 'fab_icon', '📲')
+    fab_delay = getattr(config, 'fab_delay', 0)
+    
     # CSS Dinâmico da Posição do FAB
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
