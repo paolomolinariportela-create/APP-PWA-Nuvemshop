@@ -566,6 +566,19 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('Critical block error:', e);
         }}
 
+       // --- INICIALIZAÇÃO ---
+        try {{
+            initMeta();
+            initInstallCapture();
+            initAnalytics();
+            if (isApp) {{
+                initNotificationBar();
+            }}
+        }} catch (e) {{
+            console.log('Critical block error:', e);
+        }}
+
+        // Bloco diferido: FAB e tracking (mantém o atraso para não travar o load)
         setTimeout(function () {{
             try {{
                 {fab_script}
@@ -574,15 +587,33 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }}
                 initVariantTracking();
                 initSalesTracking();
+            }} catch (e) {{
+                console.log('Deferred block error (FAB/Analytics):', e);
+            }}
+        }}, 800);
 
+        // Bottom bar: inicializa assim que o DOM estiver pronto, sem delay extra
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', function() {{
+                try {{
+                    {bottom_bar_script}
+                    if (typeof initBottomBar === 'function') {{
+                        initBottomBar();
+                    }}
+                }} catch (e) {{
+                    console.log('Bottom bar init error:', e);
+                }}
+            }});
+        }} else {{
+            try {{
                 {bottom_bar_script}
                 if (typeof initBottomBar === 'function') {{
                     initBottomBar();
                 }}
             }} catch (e) {{
-                console.log('Deferred block error:', e);
+                console.log('Bottom bar init error:', e);
             }}
-        }}, 800);
+        }}
     }})();
     """
 
