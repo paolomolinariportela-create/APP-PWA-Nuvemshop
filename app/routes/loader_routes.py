@@ -562,67 +562,55 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // --- INICIALIZAÇÃO ---
-        try {{
+         // --- INICIALIZAÇÃO ---
+        try {
             initMeta();
             initInstallCapture();
             initAnalytics();
-            if (isApp) {{
+            if (isApp) {
                 initNotificationBar();
-            }}
-        }} catch (e) {{
+            }
+        } catch (e) {
             console.log('Critical block error:', e);
-        }}
-
-       // --- INICIALIZAÇÃO ---
-        try {{
-            initMeta();
-            initInstallCapture();
-            initAnalytics();
-            if (isApp) {{
-                initNotificationBar();
-            }}
-        }} catch (e) {{
-            console.log('Critical block error:', e);
-        }}
+        }
 
         // Bloco diferido: FAB e tracking (mantém o atraso para não travar o load)
-        setTimeout(function () {{
-            try {{
+        setTimeout(function () {
+            try {
                 {fab_script}
-                if (typeof initFab === 'function') {{
+                if (typeof initFab === 'function') {
                     initFab();
-                }}
+                }
                 initVariantTracking();
                 initSalesTracking();
-            }} catch (e) {{
+            } catch (e) {
                 console.log('Deferred block error (FAB/Analytics):', e);
-            }}
-        }}, 800);
+            }
+        }, 800);
 
         // Bottom bar: inicializa assim que o DOM estiver pronto, sem delay extra
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', function() {{
-                try {{
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
                     {bottom_bar_script}
-                    if (typeof initBottomBar === 'function') {{
+                    if (typeof initBottomBar === 'function') {
                         initBottomBar();
-                    }}
-                }} catch (e) {{
+                    }
+                } catch (e) {
                     console.log('Bottom bar init error:', e);
-                }}
-            }});
-        }} else {{
-            try {{
+                }
+            });
+        } else {
+            try {
                 {bottom_bar_script}
-                if (typeof initBottomBar === 'function') {{
+                if (typeof initBottomBar === 'function') {
                     initBottomBar();
-                }}
-            }} catch (e) {{
+                }
+            } catch (e) {
                 console.log('Bottom bar init error:', e);
-            }}
-        }}
-    }})();
+            }
+        }
+    })();
     """
 
     return Response(content=js, media_type="application/javascript")
