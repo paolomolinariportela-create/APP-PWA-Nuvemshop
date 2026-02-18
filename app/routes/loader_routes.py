@@ -139,7 +139,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         """
 
-    # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
+   # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
     bottom_bar_script = f"""
         function isPwaMode() {{
             try {{
@@ -148,7 +148,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
                     if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
                 }}
-                if (window.navigator.standalone === true) return true; // iOS
+                if (window.navigator.standalone === true) return true; // iOS 
             }} catch (e) {{}}
             return false;
         }}
@@ -166,7 +166,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     bottom:0;
                     left:0;
                     right:0;
-                    height:64px;
+                    height:72px;
                     background:{bottom_bar_bg};
                     border-top:1px solid #e5e7eb;
                     display:flex;
@@ -177,6 +177,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     padding-bottom: env(safe-area-inset-bottom, 0);
                 `;
 
+                // Reserva espaço no fim da página para a barra não cobrir o conteúdo
+                try {{
+                    var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
+                    var base = parseInt(currentPadding, 10) || 0;
+                    var extra = 72; // mesma altura da barra
+                    document.body.style.paddingBottom = (base + extra) + "px";
+                }} catch (e) {{}}
+
                 function createItem(svgPath, label, href) {{
                     var btn = document.createElement('button');
                     btn.style.cssText = `
@@ -186,7 +194,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         flex-direction:column;
                         align-items:center;
                         justify-content:center;
-                        gap:3px;
+                        gap:4px;
                         font-size:10px;
                         color:{bottom_bar_icon_color};
                         cursor:pointer;
@@ -199,8 +207,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                     var iconWrapper = document.createElement('div');
                     iconWrapper.style.cssText = `
-                        width:22px;
-                        height:22px;
+                        width:28px;
+                        height:28px;
                         display:flex;
                         align-items:center;
                         justify-content:center;
@@ -208,8 +216,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     svg.setAttribute('viewBox', '0 0 24 24');
-                    svg.setAttribute('width', '24');
-                    svg.setAttribute('height', '24');
+                    svg.setAttribute('width', '28');
+                    svg.setAttribute('height', '28');
                     svg.style.fill = 'currentColor';
 
                     var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
