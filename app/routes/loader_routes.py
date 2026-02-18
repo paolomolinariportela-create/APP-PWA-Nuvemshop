@@ -370,7 +370,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (!('serviceWorker' in navigator) || !publicVapidKey) return;
             try {{
                 const registration = await navigator.serviceWorker.register(
-                    '/apps/app-pwa/service-worker.js',
+                    '/service-worker.js',
                     {{ scope: '/' }}
                 );
                 await navigator.serviceWorker.ready;
