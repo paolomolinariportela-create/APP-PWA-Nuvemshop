@@ -251,7 +251,7 @@ def get_dashboard_stats(
             "top_paginas": top_paginas,
         },
         "funil": {
-            "visitas": visitantes_unicos,
+            "visitas": pageviews,
             "carrinho": qtd_checkout,
             "checkout": qtd_vendas,
         },
