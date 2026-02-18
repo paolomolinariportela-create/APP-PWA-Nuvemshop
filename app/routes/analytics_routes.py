@@ -32,6 +32,7 @@ class VisitaPayload(BaseModel):
     cart_total: Optional[Union[int, float, str]] = None
     cart_items_count: Optional[int] = None
 
+
 class VariantEventPayload(BaseModel):
     store_id: str
     visitor_id: str
@@ -176,7 +177,7 @@ def get_dashboard_stats(
     )
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
 
-    # PAGEVIEWS E TOP PÁGINAS (igual estava)
+    # PAGEVIEWS E TOP PÁGINAS
     visitas_qs = db.query(VisitaApp).filter(VisitaApp.store_id == store_id)
     pageviews = visitas_qs.count()
 
@@ -193,12 +194,14 @@ def get_dashboard_stats(
         .all()
     ]
 
-    # CÁLCULO DO TEMPO MÉDIO NO APP (em minutos, string tipo "3,2 min")
-    from datetime import datetime
+    # CÁLCULO DO TEMPO MÉDIO NO APP
+    from datetime import datetime as _dt
 
-    # buscamos só visitas que são PWA (is_pwa=True)
     visitas_pwa = (
-        visitas_qs.filter(VisitaApp.is_pwa == True)
+        visitas_qs.filter(
+            VisitaApp.is_pwa == True,
+            VisitaApp.visitor_id.isnot(None),
+        )
         .order_by(VisitaApp.visitor_id, VisitaApp.data)
         .all()
     )
@@ -209,26 +212,25 @@ def get_dashboard_stats(
     ultimo_visitante = None
     ultima_data = None
 
+    LIMITE_SESSAO = 30 * 60  # 30 minutos
+
     for v in visitas_pwa:
         try:
-            dt = datetime.fromisoformat(v.data)
+            dt = _dt.fromisoformat(v.data)
         except Exception:
-            # se não conseguir converter a data, pula esse registro
             continue
 
         if v.visitor_id != ultimo_visitante:
-            # nova sessão
             ultimo_visitante = v.visitor_id
             ultima_data = dt
             total_sessoes += 1
         else:
-            # mesmo visitante, soma diferença de tempo entre páginas
             diff = (dt - ultima_data).total_seconds()
-            if diff > 0:
+            if 0 < diff <= LIMITE_SESSAO:
                 total_segundos += diff
             ultima_data = dt
 
-    if total_sessoes > 0:
+    if total_sessoes > 0 and total_segundos > 0:
         media_segundos = total_segundos / total_sessoes
         media_minutos = media_segundos / 60
         tempo_medio_str = f"{media_minutos:.1f} min".replace(".", ",")
@@ -270,4 +272,3 @@ def get_dashboard_stats(
         },
         "economia_ads": visitantes_unicos * 0.50,
     }
-
