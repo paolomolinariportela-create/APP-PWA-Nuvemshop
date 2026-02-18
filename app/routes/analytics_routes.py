@@ -231,7 +231,7 @@ def get_dashboard_stats(
     if total_sessoes > 0:
         media_segundos = total_segundos / total_sessoes
         media_minutos = media_segundos / 60
-        tempo_medio_str = f"{media_minutos:.1f} min"
+        tempo_medio_str = f"{media_minutos:.1f} min".replace(".", ",")
     else:
         tempo_medio_str = "--"
 
