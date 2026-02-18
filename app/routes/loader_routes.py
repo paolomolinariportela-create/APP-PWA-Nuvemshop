@@ -177,7 +177,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     padding-bottom: env(safe-area-inset-bottom, 0);
                 `;
 
-                function createItem(label, href) {{
+                function createItem(svgPath, label, href) {{
                     var btn = document.createElement('button');
                     btn.style.cssText = `
                         background:none;
@@ -185,26 +185,57 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         display:flex;
                         flex-direction:column;
                         align-items:center;
-                        font-size:11px;
+                        justify-content:center;
+                        gap:3px;
+                        font-size:10px;
                         color:{bottom_bar_icon_color};
                         cursor:pointer;
-                        font-weight:600;
-                        text-transform:uppercase;
-                        letter-spacing:0.04em;
                     `;
                     btn.onclick = function() {{
                         try {{
                             if (href) window.location.href = href;
                         }} catch (e) {{}}
                     }};
-                    btn.textContent = label;
+
+                    var iconWrapper = document.createElement('div');
+                    iconWrapper.style.cssText = `
+                        width:22px;
+                        height:22px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                    `;
+
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('viewBox', '0 0 24 24');
+                    svg.setAttribute('width', '20');
+                    svg.setAttribute('height', '20');
+                    svg.style.fill = 'currentColor';
+
+                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', svgPath);
+                    svg.appendChild(path);
+                    iconWrapper.appendChild(svg);
+
+                    var text = document.createElement('span');
+                    text.textContent = label;
+                    text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
+
+                    btn.appendChild(iconWrapper);
+                    btn.appendChild(text);
                     return btn;
                 }}
 
-                bar.appendChild(createItem("Início", "/"));
-                bar.appendChild(createItem("Loja", "/produtos"));
-                bar.appendChild(createItem("Alertas", "/notificacoes"));
-                bar.appendChild(createItem("Conta", "/minha-conta"));
+                // Paths simples, todos monocromáticos (herdam a mesma cor)
+                var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
+                var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
+                var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
+                var userPath = "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
+
+                bar.appendChild(createItem(homePath, "Início", "/"));
+                bar.appendChild(createItem(shopPath, "Loja", "/produtos"));
+                bar.appendChild(createItem(bellPath, "Alertas", "/notificacoes"));
+                bar.appendChild(createItem(userPath, "Conta", "/minha-conta"));
 
                 document.body.appendChild(bar);
             }} catch (e) {{
