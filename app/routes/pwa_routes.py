@@ -3,7 +3,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppConfig 
-from app.security import validate_proxy_hmac  # novo import
+# A validação de HMAC foi removida da rota do SW para permitir acesso público do navegador
+# from app.security import validate_proxy_hmac 
 
 router = APIRouter()
 
@@ -52,12 +53,10 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     })
 
 @router.get("/service-worker.js")
-async def get_service_worker(
-    request: Request,
-    _valid=Depends(validate_proxy_hmac)  # valida HMAC do App Proxy
-):
+def get_service_worker():
     """
-    Service Worker para Push Notifications e Cache básico (seguro).
+    Service Worker para Push Notifications e Cache básico.
+    ACESSO PÚBLICO LIBERADO (Sem validação HMAC) para que o navegador consiga baixar.
     """
     js_content = """
     const CACHE_NAME = 'app-builder-cache-v1';
