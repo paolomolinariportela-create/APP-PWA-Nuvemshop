@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, desc
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional, Union
 
@@ -141,10 +141,17 @@ def get_dashboard_stats(
     store_id: str = Depends(get_current_store),
     db: Session = Depends(get_db),
 ):
+    # janelas de tempo
+    agora = datetime.now()
+    sete_dias_atras = agora - timedelta(days=7)
+    quatorze_dias_atras = agora - timedelta(days=14)
+
+    # VENDAS / RECEITA
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum(float(v.valor) for v in vendas)
     qtd_vendas = len(vendas)
 
+    # VISITANTES ÚNICOS
     visitantes_unicos = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(VisitaApp.store_id == store_id)
@@ -152,6 +159,7 @@ def get_dashboard_stats(
         or 0
     )
 
+    # CHECKOUT / CARRINHO
     qtd_checkout = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
@@ -168,6 +176,7 @@ def get_dashboard_stats(
     abandonos = max(0, qtd_checkout - qtd_vendas)
     ticket_medio = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
 
+    # CLIENTES RECORRENTES (2+ compras)
     subquery = (
         db.query(VendaApp.visitor_id)
         .filter(VendaApp.store_id == store_id)
@@ -194,7 +203,39 @@ def get_dashboard_stats(
         .all()
     ]
 
-    # CÁLCULO DO TEMPO MÉDIO NO APP
+    # CRESCIMENTO DE INSTALAÇÕES (PWA) NOS ÚLTIMOS 7 DIAS
+    installs_7d = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+            VisitaApp.data >= sete_dias_atras.isoformat(),
+        )
+        .scalar()
+        or 0
+    )
+
+    installs_7d_antes = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+            VisitaApp.data >= quatorze_dias_atras.isoformat(),
+            VisitaApp.data < sete_dias_atras.isoformat(),
+        )
+        .scalar()
+        or 0
+    )
+
+    if installs_7d_antes > 0:
+        crescimento_instalacoes_7d = round(
+            (installs_7d - installs_7d_antes) / installs_7d_antes * 100,
+            1,
+        )
+    else:
+        crescimento_instalacoes_7d = 0.0
+
+    # TEMPO MÉDIO NO APP (PWA) – SESSÃO MÁX 5 MIN ENTRE PÁGINAS
     from datetime import datetime as _dt
 
     visitas_pwa = (
@@ -212,7 +253,7 @@ def get_dashboard_stats(
     ultimo_visitante = None
     ultima_data = None
 
-    LIMITE_SESSAO = 30 * 60  # 30 minutos
+    LIMITE_SESSAO = 5 * 60  # 5 minutos
 
     for v in visitas_pwa:
         try:
@@ -241,6 +282,7 @@ def get_dashboard_stats(
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": visitantes_unicos,
+        "crescimento_instalacoes_7d": crescimento_instalacoes_7d,
         "carrinhos_abandonados": {
             "valor": abandonos * ticket_medio,
             "qtd": abandonos,
