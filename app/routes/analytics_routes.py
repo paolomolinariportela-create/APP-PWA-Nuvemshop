@@ -176,7 +176,9 @@ def get_dashboard_stats(
     )
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
 
-    pageviews = db.query(VisitaApp).filter(VisitaApp.store_id == store_id).count()
+    # PAGEVIEWS E TOP PÁGINAS (igual estava)
+    visitas_qs = db.query(VisitaApp).filter(VisitaApp.store_id == store_id)
+    pageviews = visitas_qs.count()
 
     top_paginas = [
         p[0]
@@ -191,14 +193,59 @@ def get_dashboard_stats(
         .all()
     ]
 
+    # CÁLCULO DO TEMPO MÉDIO NO APP (em minutos, string tipo "3,2 min")
+    from datetime import datetime
+
+    # buscamos só visitas que são PWA (is_pwa=True)
+    visitas_pwa = (
+        visitas_qs.filter(VisitaApp.is_pwa == True)
+        .order_by(VisitaApp.visitor_id, VisitaApp.data)
+        .all()
+    )
+
+    total_segundos = 0
+    total_sessoes = 0
+
+    ultimo_visitante = None
+    ultima_data = None
+
+    for v in visitas_pwa:
+        try:
+            dt = datetime.fromisoformat(v.data)
+        except Exception:
+            # se não conseguir converter a data, pula esse registro
+            continue
+
+        if v.visitor_id != ultimo_visitante:
+            # nova sessão
+            ultimo_visitante = v.visitor_id
+            ultima_data = dt
+            total_sessoes += 1
+        else:
+            # mesmo visitante, soma diferença de tempo entre páginas
+            diff = (dt - ultima_data).total_seconds()
+            if diff > 0:
+                total_segundos += diff
+            ultima_data = dt
+
+    if total_sessoes > 0:
+        media_segundos = total_segundos / total_sessoes
+        media_minutos = media_segundos / 60
+        tempo_medio_str = f"{media_minutos:.1f} min"
+    else:
+        tempo_medio_str = "--"
+
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": visitantes_unicos,
-        "carrinhos_abandonados": {"valor": abandonos * ticket_medio, "qtd": abandonos},
+        "carrinhos_abandonados": {
+            "valor": abandonos * ticket_medio,
+            "qtd": abandonos,
+        },
         "visualizacoes": {
             "pageviews": pageviews,
-            "tempo_medio": "--",
+            "tempo_medio": tempo_medio_str,
             "top_paginas": top_paginas,
         },
         "funil": {
@@ -223,3 +270,4 @@ def get_dashboard_stats(
         },
         "economia_ads": visitantes_unicos * 0.50,
     }
+
