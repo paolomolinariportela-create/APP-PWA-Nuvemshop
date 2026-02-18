@@ -198,7 +198,7 @@ def get_dashboard_stats(
         "carrinhos_abandonados": {"valor": abandonos * ticket_medio, "qtd": abandonos},
         "visualizacoes": {
             "pageviews": pageviews,
-            "tempo_medio": "--",
+            "tempo_medio": tempo_medio_legivel,
             "top_paginas": top_paginas,
         },
         "funil": {
