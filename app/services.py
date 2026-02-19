@@ -227,4 +227,4 @@ def inject_script_tag(store_id: str, encrypted_access_token: str):
 
 def create_landing_page_internal(store_id: str, encrypted_access_token: str, color: str):
     # (Mantenha ou implemente aqui se precisar usar essa função)
-    pass
+    pass 
