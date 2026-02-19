@@ -40,12 +40,20 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
         "User-Agent": "AppBuilder (Builder)"
     }
     
+    # Formato novo da API de páginas (i18n)
     payload = {
-        "title": "Baixar App",
-        "body": "<h1>Baixe Nosso App</h1>",
-        "url": "app",
-        "published": True,
-        "type": "raw"
+        "page": {
+            "publish": True,
+            "i18n": {
+                "pt_BR": {
+                    "title": "Baixar App",
+                    "content": "<h1>Baixe Nosso App</h1>",
+                    "handle": "app",
+                    "seo_title": "Baixe o app da loja",
+                    "seo_description": "Instale o app da nossa loja no seu celular"
+                }
+            }
+        }
     }
 
     print(f"DEBUG: Tentando criar página para loja {store_id}...")
@@ -55,7 +63,7 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
             print(f"--> Testando POST em: {url}")
             res = requests.post(url, json=payload, headers=headers)
             print(f"    Status: {res.status_code}")
-            print(f"    Resposta: {res.text[:200]}...")
+            print(f"    Resposta: {res.text[:300]}...")
 
             if res.status_code == 201:
                 print("✅ SUCESSO! Página criada.")
