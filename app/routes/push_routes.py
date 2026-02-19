@@ -61,10 +61,19 @@ async def subscribe_push(
     db: Session = Depends(get_db),
 ):
     try:
+        print("PUSH SUBSCRIBE: RECEBIDO CHAMADO")
+        print("PUSH SUBSCRIBE RAW BODY:", await request.body())
+        print("PUSH SUBSCRIBE PAYLOAD PARSED:", payload.dict())
+
         sub_data = payload.subscription
         endpoint = sub_data.get("endpoint")
         keys = sub_data.get("keys", {})
+
+        print("PUSH SUBSCRIBE endpoint:", endpoint)
+        print("PUSH SUBSCRIBE keys:", keys)
+
         if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+            print("PUSH SUBSCRIBE ERRO: dados incompletos")
             return {"status": "error"}
 
         exists = (
@@ -73,6 +82,7 @@ async def subscribe_push(
             .first()
         )
         if not exists:
+            print("PUSH SUBSCRIBE: novo endpoint, salvando no banco")
             db.add(
                 PushSubscription(
                     store_id=payload.store_id,
@@ -84,9 +94,14 @@ async def subscribe_push(
                 )
             )
             db.commit()
+            print("PUSH SUBSCRIBE: salvo com sucesso")
             return {"status": "subscribed"}
+
+        print("PUSH SUBSCRIBE: já existente, não salva de novo")
         return {"status": "already_subscribed"}
-    except Exception:
+
+    except Exception as e:
+        print("PUSH SUBSCRIBE EXCEPTION:", e)
         return {"status": "error"}
 
 
