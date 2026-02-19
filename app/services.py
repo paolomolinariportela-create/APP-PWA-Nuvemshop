@@ -23,6 +23,7 @@ SEU_SITE_VENDAS = "https://www.seusite.com.br"
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
+
 @router.get("/loader.js", include_in_schema=False)
 def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     """
@@ -66,7 +67,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         if (window.deferredPrompt) {{
                             window.deferredPrompt.prompt();
                         }} else {{
-                            alert('Para instalar: Toque em Compartilhar/Menu e escolha "Adicionar à Tela de Início"');
+                            alert('Para instalar: Toque em Compartilhar/Menu e escolha \\"Adicionar à Tela de Início\\"');
                         }}
                     }};
                     document.body.appendChild(fab);
@@ -143,20 +144,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         async function subscribePush() {{
-            if (!('serviceWorker' in navigator) || !publicVapidKey) return;
+            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
+                console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
+                return;
+            }}
             
             try {{
-                // Tenta registrar na RAIZ primeiro
+                console.log("PUSH: registrando Service Worker...");
                 const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
+                console.log("PUSH: chamando pushManager.subscribe...");
                 const subscription = await registration.pushManager.subscribe({{
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 }});
 
-                // Envia para o backend
-                console.log("📡 Enviando inscrição Push...");
+                console.log("📡 Enviando inscrição Push para backend...");
                 const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
                     body: JSON.stringify({{
@@ -175,14 +179,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // Tenta inscrever automaticamente se já tiver permissão ou pede
-        if (Notification.permission === 'granted') {{
-            subscribePush();
-        }} else if (Notification.permission !== 'denied') {{
-            // Opcional: Pedir permissão logo de cara ou esperar interação
-            // Notification.requestPermission().then(permission => {{
-            //    if (permission === 'granted') subscribePush();
-            // }});
+        // Fluxo de permissão + subscribe
+        if (typeof Notification !== 'undefined') {{
+            if (Notification.permission === 'granted') {{
+                console.log("PUSH: permissão já concedida, inscrevendo...");
+                subscribePush();
+            }} else if (Notification.permission === 'default') {{
+                console.log("PUSH: permissão default, pedindo agora...");
+                Notification.requestPermission().then(permission => {{
+                    console.log("PUSH: resultado do requestPermission =", permission);
+                    if (permission === 'granted') {{
+                        subscribePush();
+                    }} else {{
+                        console.log("PUSH: usuário negou ou fechou o prompt");
+                    }}
+                }});
+            }} else {{
+                console.log("PUSH: permissão negada anteriormente, não tenta de novo");
+            }}
+        }} else {{
+            console.log("PUSH: Notification API não disponível neste navegador");
         }}
 
         // 4. Instalação PWA
@@ -191,10 +207,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         // 5. Injeta Scripts Visuais
         setTimeout(function() {{
             {fab_script}
-            if(typeof initFab === 'function') initFab();
+            if (typeof initFab === 'function') initFab();
             
             {bottom_bar_script}
-            if(typeof initBottomBar === 'function') initBottomBar();
+            if (typeof initBottomBar === 'function') initBottomBar();
         }}, 1000);
 
     }})();
@@ -202,11 +218,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     return Response(content=js, media_type="application/javascript")
 
-# --- FUNÇÕES AUXILIARES (MANTER IGUAL) ---
+
+# --- FUNÇÕES AUXILIARES (MANTER IGUAL / COMPLETAR DEPOIS, SE USAR) ---
 def inject_script_tag(store_id: str, encrypted_access_token: str):
-    # (Mantenha o código original dessa função aqui, ou copie do seu arquivo anterior se não mudou)
+    # (Mantenha ou implemente aqui se precisar usar essa função)
     pass
 
+
 def create_landing_page_internal(store_id: str, encrypted_access_token: str, color: str):
-    # (Mantenha o código original dessa função aqui)
+    # (Mantenha ou implemente aqui se precisar usar essa função)
     pass
