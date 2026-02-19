@@ -127,6 +127,7 @@ def install():
     if not CLIENT_ID:
         return JSONResponse(status_code=500, content={"error": "CLIENT_ID não configurado no servidor"})
 
+    # Mantém o redirect_uri apontando para /auth/callback
     REDIRECT_URI = f"{BACKEND_URL}/auth/callback"
     
     auth_url = (
@@ -232,6 +233,15 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": "Erro Interno no Servidor", "msg": str(e)})
+
+
+@router.get("/auth/callback")
+def auth_callback_alias(code: str = Query(None), db: Session = Depends(get_db)):
+    """
+    Alias para compatibilizar com redirect_uri = .../auth/callback.
+    Reaproveita toda a lógica do /callback.
+    """
+    return callback(code=code, db=db)
 
 
 @router.get("/force-page")
