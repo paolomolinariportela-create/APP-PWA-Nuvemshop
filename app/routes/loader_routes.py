@@ -45,7 +45,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_delay = getattr(config, "fab_delay", 0)
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
-    # Script do Botão Flutuante (FAB), agora encapsulado em função (CORRIGIDO)
+    # Script do Botão Flutuante (FAB)
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -177,11 +177,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     padding-bottom: env(safe-area-inset-bottom, 0);
                 `;
 
-                // Reserva espaço no fim da página para a barra não cobrir o conteúdo
                 try {{
                     var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
                     var base = parseInt(currentPadding, 10) || 0;
-                    var extra = 72; // mesma altura da barra
+                    var extra = 72;
                     document.body.style.paddingBottom = (base + extra) + "px";
                 }} catch (e) {{}}
 
@@ -234,7 +233,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     return btn;
                 }}
 
-                // Paths simples, todos monocromáticos (herdam a mesma cor)
                 var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
                 var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
                 var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
@@ -252,9 +250,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
     """
 
+    # JS FINAL (v5, com push corrigido)
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader Pro v4 (Analytics + Push + Widget + LS)");
+        console.log("🚀 PWA Loader Pro v5 - Push Force");
 
         // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
         var visitorId = localStorage.getItem('pwa_v_id');
@@ -352,7 +351,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // --- E. PUSH ---
+        // --- E. PUSH (v5, com permissão + subscribe + logs claros) ---
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
@@ -367,20 +366,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         async function subscribePush() {{
-            if (!('serviceWorker' in navigator) || !publicVapidKey) return;
+            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
+                console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
+                return;
+            }}
             try {{
-                const registration = await navigator.serviceWorker.register(
-                    '/service-worker.js',
-                    {{ scope: '/' }}
-                );
+                console.log("PUSH: registrando Service Worker...");
+                const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
+                console.log("PUSH: chamando pushManager.subscribe...");
                 const subscription = await registration.pushManager.subscribe({{
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 }});
 
-                await fetch('{final_backend_url}/push/subscribe', {{
+                console.log("📡 Enviando inscrição Push para backend...");
+                const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
                     body: JSON.stringify({{
                         subscription: subscription,
@@ -389,13 +391,15 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}),
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
-                console.log('✅ Push Inscrito com Sucesso!');
+
+                const json = await res.json();
+                console.log("✅ Push Resultado:", json);
+
             }} catch (err) {{
-                console.log('Info Push (Pode estar bloqueado ou não suportado):', err);
+                console.error("❌ Erro Push:", err);
             }}
         }}
 
-        // --- PERMISSÃO DE NOTIFICAÇÃO DENTRO DO APP ---
         function checkNotificationPermission() {{
             if (!('Notification' in window)) {{
                 return 'unsupported';
@@ -408,7 +412,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
             const current = Notification.permission;
 
+            console.log("PUSH: permissão atual =", current);
+
             if (current === 'granted') {{
+                console.log("PUSH: permissão já concedida, inscrevendo...");
                 subscribePush();
                 return;
             }}
@@ -418,11 +425,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
 
+            console.log("PUSH: permissão default, pedindo agora...");
             const result = await Notification.requestPermission();
+            console.log("PUSH: resultado do requestPermission =", result);
             if (result === 'granted') {{
                 subscribePush();
             }} else {{
-                console.log('Permissão de notificação não concedida:', result);
+                console.log('PUSH: usuário não concedeu a permissão:', result);
             }}
         }}
 
@@ -574,7 +583,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('Critical block error:', e);
         }}
 
-        // Bloco diferido: FAB e tracking (mantém o atraso para não travar o load)
+        // Bloco diferido: FAB e tracking
         setTimeout(function () {{
             try {{
                 {fab_script}
@@ -588,7 +597,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}, 800);
 
-        // Bottom bar: inicializa assim que o DOM estiver pronto, sem delay extra
+        // Bottom bar: inicializa assim que o DOM estiver pronto
         if (document.readyState === 'loading') {{
             document.addEventListener('DOMContentLoaded', function() {{
                 try {{
