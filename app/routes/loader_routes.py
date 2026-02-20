@@ -371,8 +371,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
             try {{
-                console.log("PUSH: registrando Service Worker...");
-                const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
+                console.log("PUSH: registrando Service Worker em:", '{final_backend_url}/service-worker.js');
+                const registration = await navigator.serviceWorker.register('{final_backend_url}/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
                 console.log("PUSH: chamando pushManager.subscribe...");
@@ -381,7 +381,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 }});
 
-                console.log("📡 Enviando inscrição Push para backend...");
+                console.log("📡 Enviando inscrição Push para backend em:", '{final_backend_url}/push/subscribe');
                 const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
                     body: JSON.stringify({{
@@ -392,7 +392,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
 
-                const json = await res.json();
+                console.log("PUSH /subscribe status:", res.status);
+                let json = null;
+                try {{
+                    json = await res.json();
+                }} catch (e) {{
+                    console.log("PUSH /subscribe: não conseguiu parsear JSON", e);
+                }}
                 console.log("✅ Push Resultado:", json);
 
             }} catch (err) {{
