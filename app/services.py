@@ -67,7 +67,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         if (window.deferredPrompt) {{
                             window.deferredPrompt.prompt();
                         }} else {{
-                            alert('Para instalar: Toque em Compartilhar/Menu e escolha \\"Adicionar à Tela de Início\\"');
+                            alert('Para instalar: Toque em Compartilhar/Menu e escolha \\\\"Adicionar à Tela de Início\\\\"');
                         }}
                     }};
                     document.body.appendChild(fab);
@@ -227,4 +227,4 @@ def inject_script_tag(store_id: str, encrypted_access_token: str):
 
 def create_landing_page_internal(store_id: str, encrypted_access_token: str, color: str):
     # (Mantenha ou implemente aqui se precisar usar essa função)
-    pass 
+    pass
