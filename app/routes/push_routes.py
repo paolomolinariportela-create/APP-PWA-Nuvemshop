@@ -1,171 +1,176 @@
-import os
-import json
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Response, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import Optional, Dict, Any
-from pydantic import BaseModel
-from pywebpush import webpush, WebPushException
-
 from app.database import get_db
-from app.models import PushSubscription, PushHistory, Loja
-from app.auth import get_current_store
-# from app.security import validate_proxy_hmac  # não usado aqui
-
-router = APIRouter(prefix="/push", tags=["Push"])
-
-# CONFIGURAÇÃO VAPID
-VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
-raw_claims = os.getenv("VAPID_CLAIMS", '{"sub": "mailto:admin@seuapp.com"}')
+from app.models import AppConfig
+A validação de HMAC foi removida da rota do SW para permitir acesso público do navegador
+from app.security import validate_proxy_hmac
+router = APIRouter()
+@router.get("/manifest/{store_id}.json")
+def get_manifest(store_id: str, db: Session = Depends(get_db)):
+"""
+Gera o manifesto PWA dinamicamente.
+"""
 try:
-    VAPID_CLAIMS = json.loads(raw_claims)
-except:
-    VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
+config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+except Exception as e:
+print(f"Erro no banco PWA: {e}")
+config = None
+codeCode
+# Fallbacks seguros
+app_name = config.app_name if config else "Minha Loja"
+theme_color = config.theme_color if (config and config.theme_color) else "#000000"
+background_color = theme_color  # usa a mesma cor do tema como fundo
 
+icon_src = (
+    config.logo_url
+    if (config and config.logo_url)
+    else "https://cdn-icons-png.flaticon.com/512/3081/3081559.png"
+)
 
-class PushSubscribePayload(BaseModel):
-    store_id: str
-    subscription: Dict[str, Any]
-    visitor_id: Optional[str] = None
+return JSONResponse({
+    "name": app_name,
+    "short_name": app_name[:12],
+    "start_url": f"/?utm_source=pwa_app&store_id={store_id}",
+    "display": "standalone",
+    "background_color": background_color,
+    "theme_color": theme_color,
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": icon_src,
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": icon_src,
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+})
+@router.get("/service-worker.js")
+def get_service_worker():
+"""
+Service Worker para Push Notifications e Cache básico.
+ACESSO PÚBLICO LIBERADO (Sem validação HMAC) para que o navegador consiga baixar.
+"""
+js_content = """
+const CACHE_NAME = 'app-builder-cache-v1';
+const PRECACHE_URLS = [
+// Arquivos essenciais do PWA (ajuste caminhos se necessário)
+'/service-worker.js',
+'/favicon.ico'
+// Você pode adicionar aqui ícones locais, ex: '/icon-192.png', '/icon-512.png'
+];
+codeCode
+self.addEventListener('install', (event) => {
+    console.log('Service Worker: Instalado');
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.addAll(PRECACHE_URLS).catch((err) => {
+                console.warn('SW: erro ao fazer precache', err);
+            });
+        })
+    );
+    self.skipWaiting();
+});
 
+self.addEventListener('activate', (event) => {
+    console.log('Service Worker: Ativo');
+    event.waitUntil(
+        caches.keys().then((keys) => {
+            return Promise.all(
+                keys.map((key) => {
+                    if (key !== CACHE_NAME) {
+                        console.log('SW: removendo cache antigo', key);
+                        return caches.delete(key);
+                    }
+                })
+            );
+        })
+    );
+    return self.clients.claim();
+});
 
-class PushSendPayload(BaseModel):
-    title: str
-    message: str
-    url: Optional[str] = "/"
-    icon: Optional[str] = "/icon.png"
+// Estratégia de cache simples:
+// - Arquivos estáticos (js, css, imagens, manifest): stale-while-revalidate
+// - HTML / páginas da loja: rede primeiro (não cacheamos agressivo)
+self.addEventListener('fetch', (event) => {
+    const req = event.request;
 
-
-def send_webpush(subscription_info, message_body):
-    try:
-        if not VAPID_PRIVATE_KEY:
-            return False
-        webpush(
-            subscription_info=subscription_info,
-            data=json.dumps(message_body),
-            vapid_private_key=VAPID_PRIVATE_KEY,
-            vapid_claims=VAPID_CLAIMS,
-        )
-        return True
-    except WebPushException as ex:
-        if ex.response and ex.response.status_code == 410:
-            return "DELETE"
-        return False
-
-
-@router.post("/subscribe")
-async def subscribe_push(
-    payload: PushSubscribePayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        print("PUSH SUBSCRIBE: RECEBIDO CHAMADO")
-        print("PUSH SUBSCRIBE RAW BODY:", await request.body())
-        print("PUSH SUBSCRIBE PAYLOAD PARSED:", payload.dict())
-
-        sub_data = payload.subscription
-        endpoint = sub_data.get("endpoint")
-        keys = sub_data.get("keys", {})
-
-        print("PUSH SUBSCRIBE endpoint:", endpoint)
-        print("PUSH SUBSCRIBE keys:", keys)
-
-        if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
-            print("PUSH SUBSCRIBE ERRO: dados incompletos")
-            return {"status": "error"}
-
-        exists = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.endpoint == endpoint)
-            .first()
-        )
-        if not exists:
-            print("PUSH SUBSCRIBE: novo endpoint, salvando no banco")
-            db.add(
-                PushSubscription(
-                    store_id=payload.store_id,
-                    visitor_id=payload.visitor_id,
-                    endpoint=endpoint,
-                    p256dh=keys.get("p256dh"),
-                    auth=keys.get("auth"),
-                    created_at=datetime.now().isoformat(),
-                )
-            )
-            db.commit()
-            print("PUSH SUBSCRIBE: salvo com sucesso")
-            return {"status": "subscribed"}
-
-        print("PUSH SUBSCRIBE: já existente, não salva de novo")
-        return {"status": "already_subscribed"}
-
-    except Exception as e:
-        print("PUSH SUBSCRIBE EXCEPTION:", e)
-        return {"status": "error"}
-
-
-@router.post("/send")
-def send_push_campaign(
-    payload: PushSendPayload,
-    store_id: str = Depends(get_current_store),
-    db: Session = Depends(get_db),
-):
-    subs = (
-        db.query(PushSubscription)
-        .filter(PushSubscription.store_id == store_id)
-        .all()
-    )
-    message_body = {
-        "title": payload.title,
-        "body": payload.message,
-        "url": payload.url,
-        "icon": payload.icon,
+    // Só lidamos com GET
+    if (req.method !== 'GET') {
+        return;
     }
-    sent_count = 0
-    delete_ids = []
 
-    if subs:
-        for sub in subs:
-            res = send_webpush(
-                {
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
-                message_body,
-            )
-            if res is True:
-                sent_count += 1
-            elif res == "DELETE":
-                delete_ids.append(sub.id)
-        if delete_ids:
-            db.query(PushSubscription).filter(
-                PushSubscription.id.in_(delete_ids)
-            ).delete(synchronize_session=False)
-            db.commit()
+    const acceptHeader = req.headers.get('Accept') || '';
 
-    db.add(
-        PushHistory(
-            store_id=store_id,
-            title=payload.title,
-            message=payload.message,
-            url=payload.url,
-            sent_count=sent_count,
-            created_at=datetime.now().isoformat(),
-        )
-    )
-    db.commit()
-    return {"status": "success", "sent": sent_count, "cleaned": len(delete_ids)}
+    // Se for navegação HTML (páginas da loja), deixamos seguir pela rede
+    if (acceptHeader.includes('text/html')) {
+        return;
+    }
 
+    // Para arquivos estáticos: aplicamos stale-while-revalidate
+    if (
+        req.url.includes('/manifest') ||
+        req.url.endsWith('.js') ||
+        req.url.endsWith('.css') ||
+        req.url.endsWith('.png') ||
+        req.url.endsWith('.jpg') ||
+        req.url.endsWith('.jpeg') ||
+        req.url.endsWith('.svg') ||
+        req.url.endsWith('.ico') ||
+        req.url.includes('/service-worker.js')
+    ) {
+        event.respondWith(
+            caches.match(req).then((cachedResponse) => {
+                const fetchPromise = fetch(req)
+                    .then((networkResponse) => {
+                        // Atualiza o cache em segundo plano
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(req, networkResponse.clone());
+                        });
+                        return networkResponse;
+                    })
+                    .catch((err) => {
+                        if (cachedResponse) {
+                            return cachedResponse;
+                        }
+                        throw err;
+                    });
 
-@router.get("/history")
-def get_push_history(
-    store_id: str = Depends(get_current_store),
-    db: Session = Depends(get_db),
-):
-    return (
-        db.query(PushHistory)
-        .filter(PushHistory.store_id == store_id)
-        .order_by(PushHistory.id.desc())
-        .all()
-    )
+                // Se tiver cache, retorna rápido, mas ainda busca rede
+                return cachedResponse || fetchPromise;
+            })
+        );
+    }
+    // Qualquer outra requisição (ex: APIs da loja) passa direto
+});
+
+// Push Notifications
+self.addEventListener('push', function(event) {
+    if (!(self.Notification && self.Notification.permission === 'granted')) return;
+    const data = event.data ? event.data.json() : {};
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'Novidade na Loja', {
+            body: data.body || 'Toque para conferir!',
+            icon: data.icon || '/icon.png',
+            data: { url: data.url || '/' }
+        })
+    );
+});
+
+self.addEventListener('notificationclick', function(event) {
+    event.notification.close();
+    event.waitUntil(clients.openWindow(event.notification.data.url));
+});
+"""
+return Response(
+    content=js_content,
+    media_type="application/javascript",
+    headers={
+        "Service-Worker-Allowed": "/",
+        "Cache-Control": "public, max-age=3600"
+    }
+) 
