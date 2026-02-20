@@ -572,17 +572,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         // --- INICIALIZAÇÃO ---
-        try {
+        try {{
             initMeta();
             initInstallCapture();
             initAnalytics();
-
-            // Mostrar barra de ativação de notificações também no navegador,
-            // não só dentro do PWA, para facilitar o opt-in.
-            initNotificationBar();
-        } catch (e) {
+            if (isApp) {{
+                initNotificationBar();
+            }}
+        }} catch (e) {{
             console.log('Critical block error:', e);
-        }
+        }}
 
         // Bloco diferido: FAB e tracking
         setTimeout(function () {{
