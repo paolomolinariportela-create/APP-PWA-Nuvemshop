@@ -105,7 +105,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader Pro v5 - Push Force");
+        console.log("🚀 PWA Loader DEBUG XYZ 6913785");
 
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
