@@ -1,5 +1,3 @@
-# app/services.py
-
 import os
 import json
 import requests
@@ -67,7 +65,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         if (window.deferredPrompt) {{
                             window.deferredPrompt.prompt();
                         }} else {{
-                            alert('Para instalar: Toque em Compartilhar/Menu e escolha \\\\"Adicionar à Tela de Início\\\\"');
+                            alert('Para instalar: Toque em Compartilhar/Menu e escolha "Adicionar à Tela de Início"');
                         }}
                     }};
                     document.body.appendChild(fab);
@@ -79,8 +77,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     bottom_bar_script = f"""
         function initBottomBar() {{
             try {{
-                var isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-                if (!isPwa) return;
+                if (!isApp) return;
                 
                 var bar = document.createElement('nav');
                 bar.style.cssText = `position:fixed; bottom:0; left:0; right:0; height:72px; background:{bottom_bar_bg}; border-top:1px solid #e5e7eb; display:flex; justify-content:space-around; align-items:center; z-index:2147483647; padding-bottom:env(safe-area-inset-bottom,0);`;
@@ -105,7 +102,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader DEBUG XYZ 6913785");
+        console.log("🚀 PWA Loader V8 - Final Fix");
 
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
@@ -120,14 +117,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
 
         // 2. Analytics
-        function trackVisit() {{
-            fetch('{final_backend_url}/analytics/visita', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }})
-            }}).catch(e => console.log('Analytics fail', e));
-        }}
-        trackVisit();
+        fetch('{final_backend_url}/analytics/visita', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }})
+        }}).catch(e => console.log('Analytics fail', e));
 
         // 3. Push Notification Logic
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
@@ -145,23 +139,24 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         async function subscribePush() {{
             if (!('serviceWorker' in navigator) || !publicVapidKey) {{
-                console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
+                console.log("PUSH: Sem SW ou VAPID");
                 return;
             }}
             
             try {{
-                console.log("PUSH: registrando Service Worker...");
-                const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
+                // Registra SW na raiz
+                const registration = await navigator.serviceWorker.register('{final_backend_url}/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
-                console.log("PUSH: chamando pushManager.subscribe...");
+                // Tenta inscrever
                 const subscription = await registration.pushManager.subscribe({{
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 }});
 
-                console.log("📡 Enviando inscrição Push para backend...");
-                const res = await fetch('{final_backend_url}/push/subscribe', {{
+                // Envia para o backend
+                console.log("📡 Enviando inscrição Push...");
+                await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
                     body: JSON.stringify({{
                         subscription: subscription,
@@ -170,41 +165,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}),
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
-                
-                const json = await res.json();
-                console.log("✅ Push Resultado:", json);
+                console.log("✅ Push OK");
 
             }} catch (err) {{
                 console.error("❌ Erro Push:", err);
             }}
         }}
 
-        // Fluxo de permissão + subscribe
-        if (typeof Notification !== 'undefined') {{
-            if (Notification.permission === 'granted') {{
-                console.log("PUSH: permissão já concedida, inscrevendo...");
-                subscribePush();
-            }} else if (Notification.permission === 'default') {{
-                console.log("PUSH: permissão default, pedindo agora...");
-                Notification.requestPermission().then(permission => {{
-                    console.log("PUSH: resultado do requestPermission =", permission);
-                    if (permission === 'granted') {{
-                        subscribePush();
-                    }} else {{
-                        console.log("PUSH: usuário negou ou fechou o prompt");
-                    }}
-                }});
-            }} else {{
-                console.log("PUSH: permissão negada anteriormente, não tenta de novo");
-            }}
-        }} else {{
-            console.log("PUSH: Notification API não disponível neste navegador");
+        // Inicia Push se permitido
+        if (Notification.permission === 'granted') {{
+            subscribePush();
+        }} else if (Notification.permission !== 'denied') {{
+            Notification.requestPermission().then(p => {{
+                if (p === 'granted') subscribePush();
+            }});
         }}
 
         // 4. Instalação PWA
         window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); window.deferredPrompt = e; }});
 
-        // 5. Injeta Scripts Visuais
+        // 5. Injeta Scripts Visuais (FAB e BottomBar)
         setTimeout(function() {{
             {fab_script}
             if (typeof initFab === 'function') initFab();
@@ -219,12 +199,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     return Response(content=js, media_type="application/javascript")
 
 
-# --- FUNÇÕES AUXILIARES (MANTER IGUAL / COMPLETAR DEPOIS, SE USAR) ---
+# --- FUNÇÕES AUXILIARES (Deixei vazias para não quebrar imports antigos) ---
 def inject_script_tag(store_id: str, encrypted_access_token: str):
-    # (Mantenha ou implemente aqui se precisar usar essa função)
     pass
 
-
 def create_landing_page_internal(store_id: str, encrypted_access_token: str, color: str):
-    # (Mantenha ou implemente aqui se precisar usar essa função)
     pass
