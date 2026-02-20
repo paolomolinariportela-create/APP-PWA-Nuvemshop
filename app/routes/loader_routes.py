@@ -371,8 +371,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
             try {{
-                console.log("PUSH: registrando Service Worker em:", '{final_backend_url}/service-worker.js');
-               const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+                console.log("PUSH: registrando Service Worker em: /service-worker.js");
+                const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
                 console.log("PUSH: chamando pushManager.subscribe...");
