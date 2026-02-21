@@ -10,6 +10,7 @@ from app.database import engine, Base
 import psycopg2
 from psycopg2 import sql
 
+
 def get_db_url():
     # Ajuste os nomes se seu projeto usar outra variável no Railway
     return (
@@ -17,6 +18,7 @@ def get_db_url():
         or os.environ.get("POSTGRES_URL")
         or os.environ.get("PGDATABASE_URL")
     )
+
 
 def ensure_app_config_table_and_columns():
     db_url = get_db_url()
@@ -30,11 +32,11 @@ def ensure_app_config_table_and_columns():
 
     print("[DB MIGRATION] Verificando tabela app_config...")
 
-    # 1) Garante que a tabela app_config exista (ajuste campos básicos se necessário)
+    # 1) Garante que a tabela app_config exista (mínimo)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
-            store_id VARCHAR(255) NOT NULL,
+            store_id VARCHAR(255) NOT NULL UNIQUE,
             app_name VARCHAR(255),
             theme_color VARCHAR(50),
             logo_url TEXT,
@@ -42,16 +44,31 @@ def ensure_app_config_table_and_columns():
         );
     """)
 
-    # 2) Colunas que queremos garantir (ATUALIZADO COM A BOTTOM BAR)
+    # 2) TODAS as colunas que queremos garantir (incluindo novas)
     desired_columns = {
+        # FAB
         "fab_position": "VARCHAR",
         "fab_icon": "VARCHAR",
         "fab_animation": "BOOLEAN DEFAULT TRUE",
         "fab_delay": "INTEGER DEFAULT 0",
         "fab_enabled": "BOOLEAN DEFAULT FALSE",
         "fab_text": "VARCHAR DEFAULT 'Baixar App'",
+        "fab_color": "VARCHAR DEFAULT '#2563EB'",
+        "fab_size": "VARCHAR DEFAULT 'medium'",
+
+        # TOP/BOTTOM BAR (banner / barra do widget)
+        "topbar_enabled": "BOOLEAN DEFAULT FALSE",
+        "topbar_text": "VARCHAR DEFAULT 'Baixe nosso app'",
+        "topbar_button_text": "VARCHAR DEFAULT 'Baixar'",
+        "topbar_icon": "VARCHAR DEFAULT '📲'",
+        "topbar_position": "VARCHAR DEFAULT 'bottom'",
+        "topbar_color": "VARCHAR DEFAULT '#111827'",
+        "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
+        "topbar_size": "VARCHAR DEFAULT 'medium'",
+
+        # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
-        "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'"
+        "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
     }
 
     # 3) Colunas existentes hoje
@@ -66,7 +83,9 @@ def ensure_app_config_table_and_columns():
     # 4) Cria só o que estiver faltando
     for col_name, col_type in desired_columns.items():
         if col_name not in existing_cols:
-            alter_stmt = sql.SQL("ALTER TABLE app_config ADD COLUMN {name} {ctype};").format(
+            alter_stmt = sql.SQL(
+                "ALTER TABLE app_config ADD COLUMN {name} {ctype};"
+            ).format(
                 name=sql.Identifier(col_name),
                 ctype=sql.SQL(col_type)
             )
@@ -81,6 +100,7 @@ def ensure_app_config_table_and_columns():
     cur.close()
     conn.close()
     print("[DB MIGRATION] app_config OK.")
+
 
 def ensure_lojas_logo_column():
     db_url = get_db_url()
@@ -141,12 +161,12 @@ def run_all_migrations():
 
 # --- IMPORT DAS ROTAS ---
 from app.routes import (
-    auth_routes, 
-    admin_routes, 
-    loader_routes, 
-    push_routes, 
-    analytics_routes, 
-    pwa_routes
+    auth_routes,
+    admin_routes,
+    loader_routes,
+    push_routes,
+    analytics_routes,
+    pwa_routes,
 )
 
 # 1) Roda as migrações simples antes de criar as tabelas do SQLAlchemy
@@ -159,7 +179,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="App Builder Pro API",
     description="API Modular para criação de PWAs, Push Notifications e Analytics.",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 # --- CONFIGURAÇÃO DE CORS ---
@@ -180,10 +200,10 @@ app.include_router(admin_routes.router)
 
 # 2. Funcionalidades do App (Antigo stats_routes dividido)
 # O Loader não tem prefixo pois o script é acessado como /loader.js
-app.include_router(loader_routes.router, tags=["Loader"]) 
+app.include_router(loader_routes.router, tags=["Loader"])
 
 # Rotas de Push (/push/subscribe, /push/send, /push/history)
-app.include_router(push_routes.router) 
+app.include_router(push_routes.router)
 
 # Rotas de Analytics (/analytics/dashboard, /analytics/visita, /analytics/venda)
 app.include_router(analytics_routes.router)
