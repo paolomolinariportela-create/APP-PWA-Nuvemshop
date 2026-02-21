@@ -52,13 +52,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # Mapa de tamanho -> px (ajustado para maior)
     size_map = {
         "small": 56,
-        "medium": 64,
-        "large": 72,
+        "medium": 72,
+        "large": 88,
     }
-    fab_px = size_map.get(fab_size, 64)
+    fab_px = size_map.get(fab_size, 72)
 
     # Distância maior das bordas
-    offset_px = 32
+    offset_px = 48
     position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
     # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
