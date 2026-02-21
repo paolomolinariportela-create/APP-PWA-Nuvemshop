@@ -37,7 +37,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
 
     # --- CONFIGS DO FAB (tudo vindo do banco, com defaults) ---
-    fab_enabled = True
+    fab_enabled = bool(getattr(config, "fab_enabled", False)) if config else False
     fab_text = getattr(config, "fab_text", None) or "Baixar App"
     fab_position = getattr(config, "fab_position", "right") or "right"
 
@@ -49,15 +49,17 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # Mapa de tamanho -> px (usado no JS)
+    # Mapa de tamanho -> px (ajustado para maior)
     size_map = {
-        "small": 48,
-        "medium": 56,
-        "large": 64,
+        "small": 56,
+        "medium": 64,
+        "large": 72,
     }
-    fab_px = size_map.get(fab_size, 56)
+    fab_px = size_map.get(fab_size, 64)
 
-    position_css = "right:20px;" if fab_position == "right" else "left:20px;"
+    # Distância maior das bordas
+    offset_px = 32
+    position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
     # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
     topbar_enabled = bool(getattr(config, "topbar_enabled", False)) if config else False
@@ -69,7 +71,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
     topbar_size = getattr(config, "topbar_size", None) or "medium"
 
-    # Script do Botão Flutuante (FAB) – agora respeita fab_enabled, cor e tamanho
+    # Script do Botão Flutuante (FAB)
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -79,17 +81,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 setTimeout(function() {{
                     var fab = document.createElement('div');
                     fab.id = 'pwa-fab-btn';
-                    fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{fab_color}; color:white; width:{fab_px}px; height:{fab_px}px; border-radius:999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; transition: all 0.3s ease; padding:0 16px;";
+                    fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_px}px; height:{fab_px}px; border-radius:999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; transition: all 0.3s ease; padding:0 18px;";
                     
                     var iconSpan = document.createElement('span');
-                    iconSpan.style.fontSize = "18px";
+                    iconSpan.style.fontSize = "20px";
                     iconSpan.textContent = "{fab_icon}";
 
                     var textSpan = document.createElement('span');
                     textSpan.textContent = "{fab_text}";
                     textSpan.style.whiteSpace = "nowrap";
 
-                    // Se for very small, escondemos o texto e deixamos só o ícone
                     var currentSize = "{fab_size}";
                     if (currentSize === "small") {{
                         textSpan.style.display = "none";
@@ -290,7 +291,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
     """
 
-    # JS FINAL (igual ao seu, só com fab_script atualizado e sem fab_enabled forçado)
+    # JS FINAL
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v5 - Push Force");
