@@ -23,7 +23,7 @@ def ensure_app_config_table_and_columns():
 
     print("[DB MIGRATION] Verificando tabela app_config...")
 
-    # 1) Garante que a tabela app_config exista (ajuste os campos básicos conforme seu modelo)
+    # 1) Garante que a tabela app_config exista
     cur.execute("""
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
@@ -72,3 +72,60 @@ def ensure_app_config_table_and_columns():
     cur.close()
     conn.close()
     print("[DB MIGRATION] app_config OK.")
+
+
+def ensure_lojas_logo_column():
+    db_url = get_db_url()
+    if not db_url:
+        print("[DB MIGRATION] DATABASE_URL não encontrado nas variáveis de ambiente.")
+        return
+
+    conn = psycopg2.connect(db_url)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
+
+    # Verifica se a tabela lojas existe
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_name = 'lojas'
+              AND table_schema = 'public'
+        );
+    """)
+    exists = cur.fetchone()[0]
+    if not exists:
+        print("[DB MIGRATION] Tabela lojas não existe, nada a fazer.")
+        cur.close()
+        conn.close()
+        return
+
+    # Verifica se a coluna logo_url já existe
+    cur.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'lojas'
+          AND table_schema = 'public';
+    """)
+    existing_cols = {row[0] for row in cur.fetchall()}
+
+    if "logo_url" not in existing_cols:
+        print("[DB MIGRATION] Adicionando coluna logo_url em lojas...")
+        try:
+            cur.execute("ALTER TABLE lojas ADD COLUMN logo_url VARCHAR;")
+            print("[DB MIGRATION] Coluna logo_url criada com sucesso.")
+        except Exception as e:
+            print(f"[DB MIGRATION] Erro ao adicionar coluna logo_url: {e}")
+    else:
+        print("[DB MIGRATION] Coluna logo_url já existe em lojas.")
+
+    cur.close()
+    conn.close()
+    print("[DB MIGRATION] lojas.logo_url OK.")
+
+
+def run_all_migrations():
+    ensure_app_config_table_and_columns()
+    ensure_lojas_logo_column()
