@@ -168,7 +168,7 @@ def save_config(
     config.fab_icon = payload.fab_icon
     config.fab_delay = payload.fab_delay
     config.fab_color = payload.fab_color
-    config.fab_size = _map_slider_to_size(payload.fab_size)
+    config.fab_size = "large"
 
     # Topbar / banner
     config.topbar_enabled = payload.topbar_enabled
