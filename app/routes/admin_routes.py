@@ -6,7 +6,7 @@ from typing import Optional
 from ..database import get_db
 from ..models import Loja, AppConfig
 from ..auth import get_current_store
-from ..services import create_landing_page_internal
+from ..services import create_landing_page_internal, sync_store_logo_from_nuvemshop
 
 router = APIRouter(prefix="/admin", tags=["Config"])
 
@@ -78,9 +78,13 @@ def get_store_info(
     if not loja:
         return {"url": "", "logo_url": ""}
 
-    store_url = loja.url or ""
+    # se ainda não temos logo salva, tenta sincronizar uma vez com a Nuvemshop
+    if not loja.logo_url:
+        print("[STORE-INFO] logo_url vazia, buscando na Nuvemshop...")
+        sync_store_logo_from_nuvemshop(db, loja)
+        print("[STORE-INFO] Depois do sync, logo_url:", loja.logo_url)
 
-    # Ajuste aqui o nome do campo se no modelo Loja for diferente
+    store_url = loja.url or ""
     logo_url = getattr(loja, "logo_url", None)
 
     return {
