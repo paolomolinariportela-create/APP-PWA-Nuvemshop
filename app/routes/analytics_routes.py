@@ -1,141 +1,3 @@
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct, desc
-from datetime import datetime, timedelta
-from pydantic import BaseModel
-from typing import Optional, Union
-
-from app.database import get_db
-from app.models import VendaApp, VisitaApp, VariantEvent
-from app.auth import get_current_store
-# from app.security import validate_proxy_hmac  # não usado nas rotas chamadas pelo browser
-
-router = APIRouter(prefix="/analytics", tags=["Analytics"])
-
-# ----- PAYLOADS -----
-
-
-class VendaPayload(BaseModel):
-    store_id: str
-    valor: str
-    visitor_id: str
-
-
-class VisitaPayload(BaseModel):
-    store_id: str
-    pagina: str
-    is_pwa: bool
-    visitor_id: str
-    store_ls_id: Optional[Union[str, int]] = None
-    product_id: Optional[Union[str, int]] = None
-    product_name: Optional[str] = None
-    cart_total: Optional[Union[int, float, str]] = None
-    cart_items_count: Optional[int] = None
-
-
-class VariantEventPayload(BaseModel):
-    store_id: str
-    visitor_id: str
-    product_id: str
-    variant_id: str
-    variant_name: str | None = None
-    price: str | None = None
-    stock: int | None = None
-
-
-class InstallPayload(BaseModel):
-    store_id: str
-    visitor_id: str
-
-
-# ----- ENDPOINTS DE REGISTRO (chamados pelo loader.js, sem HMAC) -----
-
-
-@router.post("/visita")
-async def registrar_visita(
-    payload: VisitaPayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    db.add(
-        VisitaApp(
-            store_id=payload.store_id,
-            pagina=payload.pagina,
-            is_pwa=payload.is_pwa,
-            visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat(),
-        )
-    )
-    db.commit()
-    return {"status": "ok"}
-
-
-@router.post("/venda")
-async def registrar_venda(
-    payload: VendaPayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    db.add(
-        VendaApp(
-            store_id=payload.store_id,
-            valor=payload.valor,
-            visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat(),
-        )
-    )
-    db.commit()
-    return {"status": "ok"}
-
-
-@router.post("/variant")
-async def registrar_variant_event(
-    payload: VariantEventPayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    db.add(
-        VariantEvent(
-            store_id=payload.store_id,
-            visitor_id=payload.visitor_id,
-            product_id=payload.product_id,
-            variant_id=payload.variant_id,
-            variant_name=payload.variant_name,
-            price=payload.price,
-            stock=payload.stock,
-            data=datetime.now().isoformat(),
-        )
-    )
-    db.commit()
-    return {"status": "ok"}
-
-
-@router.post("/install")
-async def registrar_install(
-    payload: InstallPayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """
-    Marca explicitamente uma instalação de app.
-    Para manter compatibilidade, gravamos como uma visita 'install' em modo PWA.
-    """
-    db.add(
-        VisitaApp(
-            store_id=payload.store_id,
-            pagina="install",
-            is_pwa=True,
-            visitor_id=payload.visitor_id,
-            data=datetime.now().isoformat(),
-        )
-    )
-    db.commit()
-    return {"status": "ok"}
-
-
-# ----- DASHBOARD -----
-
-
 @router.get("/dashboard")
 def get_dashboard_stats(
     store_id: str = Depends(get_current_store),
@@ -151,13 +13,42 @@ def get_dashboard_stats(
     total_receita = sum(float(v.valor) for v in vendas)
     qtd_vendas = len(vendas)
 
-    # VISITANTES ÚNICOS
+    # VISITANTES ÚNICOS (todos, app + site)
     visitantes_unicos = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(VisitaApp.store_id == store_id)
         .scalar()
         or 0
     )
+
+    # NOVO: VISITAS PWA vs WEB
+    visitas_pwa = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+        )
+        .scalar()
+        or 0
+    )
+    visitas_web = max(0, visitantes_unicos - visitas_pwa)
+
+    # NOVO: VENDAS PWA vs SITE
+    vendas_pwa = (
+        db.query(func.count(VendaApp.id))
+        .filter(
+            VendaApp.store_id == store_id,
+            VendaApp.visitor_id.in_(
+                db.query(VisitaApp.visitor_id).filter(
+                    VisitaApp.store_id == store_id,
+                    VisitaApp.is_pwa == True,
+                )
+            ),
+        )
+        .scalar()
+        or 0
+    )
+    vendas_site = max(0, qtd_vendas - vendas_pwa)
 
     # CHECKOUT / CARRINHO
     qtd_checkout = (
@@ -238,7 +129,7 @@ def get_dashboard_stats(
     # TEMPO MÉDIO NO APP (PWA) – SESSÃO MÁX 5 MIN ENTRE PÁGINAS
     from datetime import datetime as _dt
 
-    visitas_pwa = (
+    visitas_pwa_list = (
         visitas_qs.filter(
             VisitaApp.is_pwa == True,
             VisitaApp.visitor_id.isnot(None),
@@ -255,7 +146,7 @@ def get_dashboard_stats(
 
     LIMITE_SESSAO = 5 * 60  # 5 minutos
 
-    for v in visitas_pwa:
+    for v in visitas_pwa_list:
         try:
             dt = _dt.fromisoformat(v.data)
         except Exception:
@@ -281,6 +172,7 @@ def get_dashboard_stats(
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
+        # aqui você pode decidir: manter instalacoes = visitantes_unicos ou = visitas_pwa
         "instalacoes": visitantes_unicos,
         "crescimento_instalacoes_7d": crescimento_instalacoes_7d,
         "carrinhos_abandonados": {
@@ -307,10 +199,23 @@ def get_dashboard_stats(
         "ticket_medio": {"app": round(ticket_medio, 2), "site": 0.0},
         "taxa_conversao": {
             "app": round(
-                (qtd_vendas / max(1, visitantes_unicos) * 100),
+                (vendas_pwa / max(1, visitas_pwa) * 100),
                 1,
-            ),
-            "site": 0.0,
+            )
+            if visitas_pwa > 0
+            else 0.0,
+            "site": round(
+                (vendas_site / max(1, visitas_web) * 100),
+                1,
+            )
+            if visitas_web > 0
+            else 0.0,
         },
         "economia_ads": visitantes_unicos * 0.50,
+        # opcional: se no futuro quiser consumir no front
+        "visitas": {
+            "app": visitas_pwa,
+            "site": visitas_web,
+            "total": visitantes_unicos,
+        },
     }
