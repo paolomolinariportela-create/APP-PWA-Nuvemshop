@@ -47,9 +47,14 @@ def _map_slider_to_size(value: float | None) -> str:
     """
     if value is None:
         return "medium"
-    if value <= 0.9:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "medium"
+
+    if v <= 0.85:
         return "small"
-    if value >= 1.3:
+    if v >= 1.25:
         return "large"
     return "medium"
 
@@ -168,7 +173,7 @@ def save_config(
     config.fab_icon = payload.fab_icon
     config.fab_delay = payload.fab_delay
     config.fab_color = payload.fab_color
-    config.fab_size = "large"
+    config.fab_size = _map_slider_to_size(payload.fab_size)
 
     # Topbar / banner
     config.topbar_enabled = payload.topbar_enabled
