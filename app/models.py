@@ -34,6 +34,18 @@ class AppConfig(Base):
     fab_delay = Column(Integer, default=0)           # Segundos para aparecer
     fab_enabled = Column(Boolean, default=False)     # Botão Flutuante 'Baixar App'
     fab_text = Column(String, default="Baixar App")
+    fab_color = Column(String, default="#2563EB")    # NOVO: cor do botão
+    fab_size = Column(String, default="medium")      # NOVO: 'small' | 'medium' | 'large'
+
+    # TOP/BOTTOM BAR (banner / barra inferior do widget)
+    topbar_enabled = Column(Boolean, default=False)          # NOVO: habilita banner/barra
+    topbar_text = Column(String, default="Baixe nosso app")  # NOVO: texto principal
+    topbar_button_text = Column(String, default="Baixar")    # NOVO: texto do botão
+    topbar_icon = Column(String, default="📲")               # NOVO: ícone/emoji
+    topbar_position = Column(String, default="bottom")       # NOVO: 'top' ou 'bottom'
+    topbar_color = Column(String, default="#111827")         # NOVO: cor de fundo
+    topbar_text_color = Column(String, default="#FFFFFF")    # NOVO: cor do texto
+    topbar_size = Column(String, default="medium")           # NOVO: tamanho
 
     # BOTTOM BAR DO APP (barra de navegação inferior do PWA)
     bottom_bar_bg = Column(String, default="#FFFFFF")          # Fundo da barra
