@@ -48,28 +48,27 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
 
-# Fator numérico vindo do painel (0.7–1.5). Se vier string, converte.
-raw_factor = getattr(config, "fab_size", 1.0) if config else 1.0
-try:
-    fab_factor = float(raw_factor)
-except (TypeError, ValueError):
-    fab_factor = 1.0
+    # Fator numérico vindo do painel (0.7–1.5). Se vier string, converte.
+    raw_factor = getattr(config, "fab_size", 1.0) if config else 1.0
+    try:
+        fab_factor = float(raw_factor)
+    except (TypeError, ValueError):
+        fab_factor = 1.0
 
-# Clampa para evitar exageros
-if fab_factor < 0.7:
-    fab_factor = 0.7
-if fab_factor > 1.5:
-    fab_factor = 1.5
+    # Clampa para evitar exageros
+    if fab_factor < 0.7:
+        fab_factor = 0.7
+    if fab_factor > 1.5:
+        fab_factor = 1.5
 
-# Tamanho base em px (modelo comum de mercado: pílula média)
-base_width = 90   # largura base do botão
-base_height = 54  # altura base do botão
+    # Tamanho base em px (pílula padrão de mercado)
+    base_width = 90   # largura base
+    base_height = 54  # altura base
 
-fab_width = int(base_width * fab_factor)
-fab_height = int(base_height * fab_factor)
+    fab_width = int(base_width * fab_factor)
+    fab_height = int(base_height * fab_factor)
 
-
-    # Distância maior das bordas
+    # Distância das bordas (padrão: canto inferior, acima da bottom bar)
     offset_px = 56
     position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
@@ -103,8 +102,6 @@ fab_height = int(base_height * fab_factor)
                     textSpan.textContent = "{fab_text}";
                     textSpan.style.whiteSpace = "nowrap";
 
-                    
-
                     fab.appendChild(iconSpan);
                     fab.appendChild(textSpan);
 
@@ -118,11 +115,11 @@ fab_height = int(base_height * fab_factor)
 
                         var steps = "";
                         if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha Adicionar página a, depois Tela inicial.\\\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione Adicionar à Tela de Início.\\\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else {{
-                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
+                            steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\\\n3. Confirme para instalar o app no seu celular.";
                         }}
 
                         var modal = document.createElement('div');
