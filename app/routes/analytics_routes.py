@@ -159,7 +159,7 @@ def get_dashboard_stats(
         or 0
     )
 
-    # NOVO: VISITAS PWA vs SITE (apenas adicionando info extra)
+    # INFO EXTRA: VISITAS PWA vs SITE
     visitas_pwa = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
@@ -171,7 +171,7 @@ def get_dashboard_stats(
     )
     visitas_site = max(0, visitantes_unicos - visitas_pwa)
 
-    # NOVO: VENDAS PWA vs SITE (apenas info extra)
+    # INFO EXTRA: VENDAS PWA vs SITE
     vendas_pwa = (
         db.query(func.count(VendaApp.id))
         .filter(
@@ -226,6 +226,23 @@ def get_dashboard_stats(
             func.count(VisitaApp.pagina).label("total"),
         )
         .filter(VisitaApp.store_id == store_id)
+        .group_by(VisitaApp.pagina)
+        .order_by(desc("total"))
+        .limit(5)
+        .all()
+    ]
+
+    # NOVO: Top páginas apenas do APP (PWA)
+    top_paginas_pwa = [
+        p[0]
+        for p in db.query(
+            VisitaApp.pagina,
+            func.count(VisitaApp.pagina).label("total"),
+        )
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+        )
         .group_by(VisitaApp.pagina)
         .order_by(desc("total"))
         .limit(5)
@@ -308,7 +325,6 @@ def get_dashboard_stats(
         tempo_medio_str = "--"
 
     return {
-        # CAMPOS ANTIGOS (inalterados)
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": visitantes_unicos,
@@ -321,6 +337,7 @@ def get_dashboard_stats(
             "pageviews": pageviews,
             "tempo_medio": tempo_medio_str,
             "top_paginas": top_paginas,
+            "top_paginas_pwa": top_paginas_pwa,
         },
         "funil": {
             "visitas": visitantes_unicos,
@@ -343,7 +360,6 @@ def get_dashboard_stats(
             "site": 0.0,
         },
         "economia_ads": visitantes_unicos * 0.50,
-        # NOVO BLOCO EXTRA (não usado pelo front ainda, não quebra nada)
         "extra_pwa": {
             "visitas_pwa": visitas_pwa,
             "visitas_site": visitas_site,
