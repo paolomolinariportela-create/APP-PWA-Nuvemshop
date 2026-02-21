@@ -23,11 +23,11 @@ def ensure_app_config_table_and_columns():
 
     print("[DB MIGRATION] Verificando tabela app_config...")
 
-    # 1) Garante que a tabela app_config exista
+    # 1) Garante que a tabela app_config exista (mínimo)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
-            store_id VARCHAR(255) NOT NULL,
+            store_id VARCHAR(255) NOT NULL UNIQUE,
             app_name VARCHAR(255),
             theme_color VARCHAR(50),
             logo_url TEXT,
@@ -37,12 +37,29 @@ def ensure_app_config_table_and_columns():
 
     # 2) Lista de colunas que queremos garantir
     desired_columns = {
+        # FAB
         "fab_position": "VARCHAR",
         "fab_icon": "VARCHAR",
         "fab_animation": "BOOLEAN DEFAULT TRUE",
         "fab_delay": "INTEGER DEFAULT 0",
         "fab_enabled": "BOOLEAN DEFAULT FALSE",
-        "fab_text": "VARCHAR DEFAULT 'Baixar App'"
+        "fab_text": "VARCHAR DEFAULT 'Baixar App'",
+        "fab_color": "VARCHAR DEFAULT '#2563EB'",
+        "fab_size": "VARCHAR DEFAULT 'medium'",
+
+        # TOP/BOTTOM BAR (banner / barra do widget)
+        "topbar_enabled": "BOOLEAN DEFAULT FALSE",
+        "topbar_text": "VARCHAR DEFAULT 'Baixe nosso app'",
+        "topbar_button_text": "VARCHAR DEFAULT 'Baixar'",
+        "topbar_icon": "VARCHAR DEFAULT '📲'",
+        "topbar_position": "VARCHAR DEFAULT 'bottom'",
+        "topbar_color": "VARCHAR DEFAULT '#111827'",
+        "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
+        "topbar_size": "VARCHAR DEFAULT 'medium'",
+
+        # BOTTOM BAR DO APP (PWA)
+        "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
+        "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
     }
 
     # 3) Descobre quais colunas já existem na tabela
@@ -57,7 +74,9 @@ def ensure_app_config_table_and_columns():
     # 4) Cria apenas as colunas que estiverem faltando
     for col_name, col_type in desired_columns.items():
         if col_name not in existing_cols:
-            alter_stmt = sql.SQL("ALTER TABLE app_config ADD COLUMN {name} {ctype};").format(
+            alter_stmt = sql.SQL(
+                "ALTER TABLE app_config ADD COLUMN {name} {ctype};"
+            ).format(
                 name=sql.Identifier(col_name),
                 ctype=sql.SQL(col_type)
             )
