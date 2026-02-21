@@ -29,23 +29,47 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         print(f"Erro ao buscar config: {e}")
         config = None
 
+    # Cores básicas
     color = config.theme_color if config else "#000000"
 
-    # --- NOVAS CORES DA BOTTOM BAR (com defaults) ---
+    # --- NOVAS CORES / CONFIGS DA BOTTOM BAR (com defaults) ---
     bottom_bar_bg = getattr(config, "bottom_bar_bg", "#FFFFFF") if config else "#FFFFFF"
     bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
 
-    fab_enabled = True  # FORÇAR LIGADO PARA TESTE
-    fab_text = config.fab_text if (config and config.fab_text) else "Baixar App"
-    fab_position = getattr(config, "fab_position", "right")
+    # --- CONFIGS DO FAB (tudo vindo do banco, com defaults) ---
+    fab_enabled = bool(getattr(config, "fab_enabled", False)) if config else False
+    fab_text = getattr(config, "fab_text", None) or "Baixar App"
+    fab_position = getattr(config, "fab_position", "right") or "right"
 
     raw_icon = getattr(config, "fab_icon", None)
     fab_icon = raw_icon if (raw_icon and str(raw_icon).strip()) else "📲"
 
-    fab_delay = getattr(config, "fab_delay", 0)
+    fab_delay = getattr(config, "fab_delay", 0) or 0
+
+    fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
+    fab_size = getattr(config, "fab_size", "medium") if config else "medium"
+
+    # Mapa de tamanho -> px (usado no JS)
+    size_map = {
+        "small": 48,
+        "medium": 56,
+        "large": 64,
+    }
+    fab_px = size_map.get(fab_size, 56)
+
     position_css = "right:20px;" if fab_position == "right" else "left:20px;"
 
-    # Script do Botão Flutuante (FAB)
+    # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
+    topbar_enabled = bool(getattr(config, "topbar_enabled", False)) if config else False
+    topbar_text = getattr(config, "topbar_text", None) or "Baixe nosso app"
+    topbar_button_text = getattr(config, "topbar_button_text", None) or "Baixar"
+    topbar_icon = getattr(config, "topbar_icon", None) or "📲"
+    topbar_position = getattr(config, "topbar_position", None) or "bottom"
+    topbar_color = getattr(config, "topbar_color", None) or "#111827"
+    topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
+    topbar_size = getattr(config, "topbar_size", None) or "medium"
+
+    # Script do Botão Flutuante (FAB) – agora respeita fab_enabled, cor e tamanho
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -55,8 +79,24 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 setTimeout(function() {{
                     var fab = document.createElement('div');
                     fab.id = 'pwa-fab-btn';
-                    fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{color}; color:white; padding:12px 24px; border-radius:50px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; transition: all 0.3s ease;";
-                    fab.innerHTML = "<span style='font-size:18px'>{fab_icon}</span> <span>{fab_text}</span>";
+                    fab.style.cssText = "position:fixed; bottom:20px; {position_css} background:{fab_color}; color:white; width:{fab_px}px; height:{fab_px}px; border-radius:999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; transition: all 0.3s ease; padding:0 16px;";
+                    
+                    var iconSpan = document.createElement('span');
+                    iconSpan.style.fontSize = "18px";
+                    iconSpan.textContent = "{fab_icon}";
+
+                    var textSpan = document.createElement('span');
+                    textSpan.textContent = "{fab_text}";
+                    textSpan.style.whiteSpace = "nowrap";
+
+                    // Se for very small, escondemos o texto e deixamos só o ícone
+                    var currentSize = "{fab_size}";
+                    if (currentSize === "small") {{
+                        textSpan.style.display = "none";
+                    }}
+
+                    fab.appendChild(iconSpan);
+                    fab.appendChild(textSpan);
 
                     function showInstallHelpModal() {{
                         var existing = document.getElementById('pwa-install-modal');
@@ -250,7 +290,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
     """
 
-    # JS FINAL (v5, com push corrigido)
+    # JS FINAL (igual ao seu, só com fab_script atualizado e sem fab_enabled forçado)
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v5 - Push Force");
