@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 # --- IMPORTS INTERNOS ---
 from app.database import engine, Base
 
-# --- MIGRAÇÃO SIMPLES DO app_config ---
+# --- MIGRAÇÃO SIMPLES DO app_config E lojas ---
 import psycopg2
 from psycopg2 import sql
 
@@ -82,6 +82,63 @@ def ensure_app_config_table_and_columns():
     conn.close()
     print("[DB MIGRATION] app_config OK.")
 
+def ensure_lojas_logo_column():
+    db_url = get_db_url()
+    if not db_url:
+        print("[DB MIGRATION] DATABASE_URL não encontrado nas variáveis de ambiente.")
+        return
+
+    conn = psycopg2.connect(db_url)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
+
+    # Verifica se a tabela lojas existe
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_name = 'lojas'
+              AND table_schema = 'public'
+        );
+    """)
+    exists = cur.fetchone()[0]
+    if not exists:
+        print("[DB MIGRATION] Tabela lojas não existe, nada a fazer.")
+        cur.close()
+        conn.close()
+        return
+
+    # Verifica se a coluna logo_url já existe
+    cur.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'lojas'
+          AND table_schema = 'public';
+    """)
+    existing_cols = {row[0] for row in cur.fetchall()}
+
+    if "logo_url" not in existing_cols:
+        print("[DB MIGRATION] Adicionando coluna logo_url em lojas...")
+        try:
+            cur.execute("ALTER TABLE lojas ADD COLUMN logo_url VARCHAR;")
+            print("[DB MIGRATION] Coluna logo_url criada com sucesso.")
+        except Exception as e:
+            print(f"[DB MIGRATION] Erro ao adicionar coluna logo_url: {e}")
+    else:
+        print("[DB MIGRATION] Coluna logo_url já existe em lojas.")
+
+    cur.close()
+    conn.close()
+    print("[DB MIGRATION] lojas.logo_url OK.")
+
+
+def run_all_migrations():
+    ensure_app_config_table_and_columns()
+    ensure_lojas_logo_column()
+
+
 # --- IMPORT DAS ROTAS ---
 from app.routes import (
     auth_routes, 
@@ -92,8 +149,8 @@ from app.routes import (
     pwa_routes
 )
 
-# 1) Roda a migração simples antes de criar as tabelas do SQLAlchemy
-ensure_app_config_table_and_columns()
+# 1) Roda as migrações simples antes de criar as tabelas do SQLAlchemy
+run_all_migrations()
 
 # 2) Inicializa as tabelas do Banco de Dados gerenciadas pelo SQLAlchemy
 Base.metadata.create_all(bind=engine)
