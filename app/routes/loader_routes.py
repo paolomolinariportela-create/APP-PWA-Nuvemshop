@@ -49,16 +49,20 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # Mapa de tamanho -> px (ajustado para maior)
-    size_map = {
-        "small": 56,
-        "medium": 72,
-        "large": 88,
+    if fab_size == "small":
+         fab_width = 54
+         fab_height = 46
+    elif fab_size == "large":
+         fab_width = 120
+         fab_height = 60
+    else:  # medium
+        fab_width = 90
+        fab_height = 54
     }
     fab_px = size_map.get(fab_size, 72)
 
     # Distância maior das bordas
-    offset_px = 48
+    offset_px = 56
     position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
     # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
@@ -81,7 +85,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 setTimeout(function() {{
                     var fab = document.createElement('div');
                     fab.id = 'pwa-fab-btn';
-                    fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_px}px; height:{fab_px}px; border-radius:999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; transition: all 0.3s ease; padding:0 18px;";
+                    fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
                     
                     var iconSpan = document.createElement('span');
                     iconSpan.style.fontSize = "20px";
