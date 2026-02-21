@@ -11,6 +11,9 @@ class Loja(Base):
     email = Column(String, nullable=True)
     url = Column(String, nullable=True)
 
+    # Logo padrão da loja (vinda da Nuvemshop)
+    logo_url = Column(String, nullable=True)
+
 
 # Tabela de Configuração (Cores, Nome do App e Widgets)
 class AppConfig(Base):
