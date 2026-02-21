@@ -37,7 +37,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
 
     # --- CONFIGS DO FAB (tudo vindo do banco, com defaults) ---
-    fab_enabled = bool(getattr(config, "fab_enabled", False)) if config else False
+    fab_enabled = True
     fab_text = getattr(config, "fab_text", None) or "Baixar App"
     fab_position = getattr(config, "fab_position", "right") or "right"
 
