@@ -1,710 +1,675 @@
-import React from "react";
-import PhonePreview from "../pages/PhonePreview";
+import os
+from fastapi import APIRouter, Depends, Response, Request
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import AppConfig
 
-interface AppConfig {
-  app_name: string;
-  theme_color: string;
-  logo_url: string;
-  whatsapp_number: string;
+router = APIRouter()
 
-  fab_enabled?: boolean;
-  fab_text?: string;
-  fab_position?: string;
-  fab_icon?: string;
-  fab_delay?: number;
-  fab_size?: "small" | "medium" | "large";
-  fab_color?: string;
+# --- CONFIGURAÇÕES DE AMBIENTE ---
+BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if BACKEND_URL and not BACKEND_URL.startswith("http"):
+    BACKEND_URL = f"https://{BACKEND_URL}"
 
-  topbar_enabled?: boolean;
-  topbar_text?: string;
-  topbar_button_text?: string;
-  topbar_icon?: string;
-  topbar_position?: "top" | "bottom";
-  topbar_color?: string;
-  topbar_text_color?: string;
-  topbar_size?: number;
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
-  bottom_bar_enabled?: boolean;
-  bottom_bar_bg?: string;
-  bottom_bar_icon_color?: string;
 
-  default_logo_url?: string;
-}
+@router.get("/loader.js", include_in_schema=False)
+def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Gera o script loader.js personalizado para cada loja.
+    Uso no frontend da loja: <script src="https://seu-api.com/loader.js?store_id=123"></script>
+    """
 
-interface Props {
-  config: AppConfig;
-  setConfig: (c: AppConfig) => void;
-  handleSave: () => void;
-  saving: boolean;
-  loading: boolean;
-  storeUrl: string;
-}
+    final_backend_url = BACKEND_URL or str(request.base_url).rstrip("/")
 
-// helper: converte slider numérico para small/medium/large
-function mapSliderToFabSize(value: number): "small" | "medium" | "large" {
-  if (value <= 0.85) return "small";
-  if (value >= 1.25) return "large";
-  return "medium";
-}
+    try:
+        config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    except Exception as e:
+        print(f"Erro ao buscar config: {e}")
+        config = None
 
-// helper: converte small/medium/large para valor do slider (para exibir)
-function mapFabSizeToSlider(size?: "small" | "medium" | "large"): number {
-  if (size === "small") return 0.8;
-  if (size === "large") return 1.4;
-  return 1.0; // medium default
-}
+    # Cores básicas
+    color = config.theme_color if config else "#000000"
 
-export default function TabConfig({
-  config,
-  setConfig,
-  handleSave,
-  saving,
-  loading,
-  storeUrl,
-}: Props) {
-  const copyLink = () => {
-    navigator.clipboard.writeText(`${storeUrl}/pages/app`);
-    alert("Link copiado!");
-  };
+    # --- NOVAS CORES / CONFIGS DA BOTTOM BAR (com defaults) ---
+    bottom_bar_bg = getattr(config, "bottom_bar_bg", "#FFFFFF") if config else "#FFFFFF"
+    bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
 
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code?size=150x150&data=${encodeURIComponent(
-    `${storeUrl}/pages/app`
-  )}&color=000000`;
+    # --- CONFIGS DO FAB (tudo vindo do banco, com defaults) ---
+    fab_enabled = bool(getattr(config, "fab_enabled", False)) if config else False
+    fab_text = getattr(config, "fab_text", None) or "Baixar App"
+    fab_position = getattr(config, "fab_position", "right") or "right"
 
-  const appInitial =
-    config.app_name?.trim()?.charAt(0).toUpperCase() || "A";
+    raw_icon = getattr(config, "fab_icon", None)
+    fab_icon = raw_icon if (raw_icon and str(raw_icon).strip()) else "📲"
 
-  const logoToUse = config.logo_url || config.default_logo_url;
-  const fabColor = config.fab_color || config.theme_color;
-  const topbarColor = config.topbar_color || "#111827";
-  const topbarTextColor = config.topbar_text_color || "#FFFFFF";
+    fab_delay = getattr(config, "fab_delay", 0) or 0
 
-  // valor do slider derivado do fab_size (small/medium/large)
-  const fabSizeSlider = mapFabSizeToSlider(config.fab_size);
+    fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
+    fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-  return (
-    <div
-      className="editor-grid animate-fade-in"
-      style={{ marginTop: "20px" }}
-    >
-      <div className="config-section" style={{ gridColumn: "1 / -1" }}>
-        <h2 style={{ marginBottom: "20px" }}>Personalizar Aplicativo</h2>
+    # Largura x altura por tamanho (pílula)
+    if fab_size == "small":
+        fab_width = 54
+        fab_height = 46
+    elif fab_size == "large":
+        fab_width = 120
+        fab_height = 60
+    else:  # medium
+        fab_width = 90
+        fab_height = 54
 
-        {/* LINK E QR CODE */}
-        <div className="config-card" style={{ background: "#f5f3ff", border: "1px solid #ddd6fe" }}>
-          <div className="card-header">
-            <h3 style={{ color: "#7C3AED", margin: 0 }}>Link de Download</h3>
-            <p style={{ margin: "5px 0" }}>
-              Divulgue este link no Instagram.
-            </p>
-          </div>
-          <div>
-            <div className="form-group">
-              <div style={{ display: "flex", gap: "10px" }}>
-                <input
-                  type="text"
-                  readOnly
-                  value={
-                    storeUrl ? `${storeUrl}/pages/app` : "Carregando..."
-                  }
-                  style={{
-                    backgroundColor: "white",
-                    color: "#555",
-                    flex: 1,
-                    padding: "10px",
-                    borderRadius: "6px",
-                    border: "1px solid #ccc",
-                  }}
-                />
-                <button
-                  onClick={copyLink}
-                  style={{
-                    background: "#8B5CF6",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    padding: "0 20px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Copiar
-                </button>
-              </div>
-            </div>
-          </div>
+    # Distância maior das bordas
+    offset_px = 56
+    position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
-          <div
-            className="config-card"
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "20px",
-              display: "flex",
-              marginTop: "15px",
-            }}
-          >
-            <img
-              src={qrCodeUrl}
-              alt="QR Code"
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "8px",
-                border: "1px solid #eee",
-              }}
-            />
-            <div>
-              <h3 style={{ fontSize: "16px", margin: "0 0 5px 0" }}>
-                QR Code de Balcão
-              </h3>
-              <a
-                href={qrCodeUrl}
-                download="qrcode.png"
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: "#7C3AED",
-                  textDecoration: "none",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                }}
-              >
-                Baixar Imagem
-              </a>
-            </div>
-          </div>
-        </div>
+    # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
+    topbar_enabled = bool(getattr(config, "topbar_enabled", False)) if config else False
+    topbar_text = getattr(config, "topbar_text", None) or "Baixe nosso app"
+    topbar_button_text = getattr(config, "topbar_button_text", None) or "Baixar"
+    topbar_icon = getattr(config, "topbar_icon", None) or "📲"
+    topbar_position = getattr(config, "topbar_position", None) or "bottom"
+    topbar_color = getattr(config, "topbar_color", None) or "#111827"
+    topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
+    topbar_size = getattr(config, "topbar_size", None) or "medium"
 
-        {/* IDENTIDADE VISUAL + PREVIEW SPLASH */}
-        <div className="config-card">
-          <div className="card-header" style={{ marginBottom: "1rem" }}>
-            <h3 style={{ margin: 0 }}>Identidade Visual</h3>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.4fr)",
-              gap: "24px",
-              alignItems: "flex-start",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: "18px",
-                alignItems: "flex-start",
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: "220px" }}>
-                <div className="form-group">
-                  <label>Nome do Aplicativo</label>
-                  <input
-                    type="text"
-                    value={config.app_name}
-                    onChange={(e) =>
-                      setConfig({ ...config, app_name: e.target.value })
-                    }
-                    placeholder="Ex: Minha Loja Oficial"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Cor Principal (Tema)</label>
-                  <div className="color-picker-wrapper">
-                    <input
-                      type="color"
-                      value={config.theme_color}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          theme_color: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={config.theme_color}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          theme_color: e.target.value,
-                        })
-                      }
-                      className="color-text"
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Logo URL (Link da Imagem)</label>
-                  <input
-                    type="text"
-                    value={config.logo_url}
-                    onChange={(e) =>
-                      setConfig({ ...config, logo_url: e.target.value })
-                    }
-                    placeholder={
-                      config.default_logo_url
-                        ? `Padrão: ${config.default_logo_url}`
-                        : "https://..."
-                    }
-                  />
-                </div>
-              </div>
+    # Script do Botão Flutuante (FAB)
+    fab_script = ""
+    if fab_enabled:
+        fab_script = f"""
+            function initFab() {{
+                if (window.innerWidth >= 900 || isApp) return;
 
-              <div
-                style={{
-                  width: "120px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "72px",
-                    height: "72px",
-                    borderRadius: "16px",
-                    background: config.theme_color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    boxShadow: "0 6px 12px rgba(0,0,0,0.15)",
-                  }}
-                >
-                  {logoToUse ? (
-                    <img
-                      src={logoToUse}
-                      alt="Logo preview"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        color: "#fff",
-                        fontWeight: 700,
-                        fontSize: "28px",
-                      }}
-                    >
-                      {appInitial}
-                    </span>
-                  )}
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#6B7280",
-                    textAlign: "center",
-                  }}
-                >
-                  Prévia do ícone
-                </span>
-              </div>
-            </div>
+                setTimeout(function() {{
+                    var fab = document.createElement('div');
+                    fab.id = 'pwa-fab-btn';
+                    fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
+                    
+                    var iconSpan = document.createElement('span');
+                    iconSpan.style.fontSize = "20px";
+                    iconSpan.textContent = "{fab_icon}";
 
-            <div>
-              <h4
-                style={{
-                  margin: "0 0 10px 0",
-                  fontSize: "14px",
-                  textAlign: "center",
-                }}
-              >
-                Como fica a tela de abertura
-              </h4>
-              <PhonePreview
-                appName={config.app_name}
-                themeColor={config.theme_color}
-                logoUrl={logoToUse || undefined}
-                fabEnabled={false}
-                storeUrl={storeUrl}
-                mode="splash"
-              />
-            </div>
-          </div>
-        </div>
+                    var textSpan = document.createElement('span');
+                    textSpan.textContent = "{fab_text}";
+                    textSpan.style.whiteSpace = "nowrap";
 
-        {/* WIDGETS DE CONVERSÃO (FAB + BARRA FIXA) */}
-        <div className="config-card">
-          <div className="card-header">
-            <h3 style={{ margin: 0 }}>Widgets de Conversão</h3>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.4fr)",
-              gap: "24px",
-              alignItems: "flex-start",
-            }}
-          >
-            {/* Coluna esquerda */}
-            <div>
-              {/* FAB */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "15px",
-                  padding: "12px",
-                  background: "#f9fafb",
-                  borderRadius: "8px",
-                  border: "1px solid #eee",
-                }}
-              >
-                <div>
-                  <h4 style={{ margin: 0, fontSize: "14px" }}>
-                    Botão Flutuante (FAB)
-                  </h4>
-                  <small style={{ color: "#666", fontSize: "11px" }}>
-                    Ícone de download fixo no canto da tela.
-                  </small>
-                </div>
-                <label
-                  style={{
-                    position: "relative",
-                    display: "inline-block",
-                    width: "46px",
-                    height: "24px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={config.fab_enabled ?? false}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        fab_enabled: e.target.checked,
-                      })
-                    }
-                    style={{ opacity: 0, width: 0, height: 0 }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      cursor: "pointer",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor:
-                        config.fab_enabled ?? false ? "#10B981" : "#E5E7EB",
-                      transition: ".3s",
-                      borderRadius: "34px",
+                    var currentSize = "{fab_size}";
+                    if (currentSize === "small") {{
+                        textSpan.style.display = "none";
                     }}
-                  ></span>
-                  <span
-                    style={{
-                      position: "absolute",
-                      height: "18px",
-                      width: "18px",
-                      left: "3px",
-                      bottom: "3px",
-                      backgroundColor: "white",
-                      transition: ".3s",
-                      borderRadius: "50%",
-                      transform:
-                        config.fab_enabled ?? false
-                          ? "translateX(22px)"
-                          : "translateX(0px)",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+
+                    fab.appendChild(iconSpan);
+                    fab.appendChild(textSpan);
+
+                    function showInstallHelpModal() {{
+                        var existing = document.getElementById('pwa-install-modal');
+                        if (existing) existing.remove();
+
+                        var ua = navigator.userAgent || "";
+                        var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
+                        var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
+
+                        var steps = "";
+                        if (isSamsung) {{
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
+                        }} else if (isSafari) {{
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
+                        }} else {{
+                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
+                        }}
+
+                        var modal = document.createElement('div');
+                        modal.id = 'pwa-install-modal';
+                        modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
+
+                        var box = document.createElement('div');
+                        box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
+
+                        box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
+                                        "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
+                                        "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
+                                        "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
+
+                        modal.appendChild(box);
+                        document.body.appendChild(modal);
+
+                        document.getElementById('pwa-install-modal-close').onclick = function() {{
+                            modal.remove();
+                        }};
                     }}
-                  ></span>
-                </label>
-              </div>
 
-              {config.fab_enabled && (
-                <div
-                  className="animate-fade-in"
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    padding: "15px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "15px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          color: "#374151",
-                          display: "block",
-                          marginBottom: "5px",
+                    fab.onclick = function() {{
+                        if (window.deferredPrompt) {{
+                            window.deferredPrompt.prompt();
+                            window.deferredPrompt.userChoice.then(function(choiceResult) {{
+                                if (choiceResult.outcome === 'accepted') {{
+                                    fab.style.display = 'none';
+                                    try {{
+                                        fetch('{final_backend_url}/analytics/install', {{
+                                            method: 'POST',
+                                            headers: {{ 'Content-Type': 'application/json' }},
+                                            body: JSON.stringify({{
+                                                store_id: '{store_id}',
+                                                visitor_id: visitorId
+                                            }})
+                                        }});
+                                    }} catch (e) {{}}
+                                }}
+                                window.deferredPrompt = null;
+                            }});
+                        }} else {{
+                            showInstallHelpModal();
                         }}
-                      >
-                        Texto do Botão
-                      </label>
-                      <input
-                        type="text"
-                        value={config.fab_text ?? "Baixar App"}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_text: e.target.value,
-                          })
-                        }
-                        placeholder="Ex: Instalar Agora"
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                        }}
-                      />
-                    </div>
+                    }};
 
-                    <div style={{ width: "80px" }}>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          color: "#374151",
-                          display: "block",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Ícone
-                      </label>
-                      <input
-                        type="text"
-                        value={config.fab_icon ?? ""}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_icon: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                        placeholder="Ex: 📲"
-                      />
-                    </div>
-                  </div>
+                    fab.animate(
+                        [{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}],
+                        {{ duration: 500, easing: 'ease-out' }}
+                    );
+                    document.body.appendChild(fab);
 
-                  {/* Cor do botão */}
-                  <div className="form-group">
-                    <label>Cor do botão “Baixar App”</label>
-                    <div className="color-picker-wrapper">
-                      <input
-                        type="color"
-                        value={fabColor}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_color: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        type="text"
-                        className="color-text"
-                        value={fabColor}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_color: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <small>
-                      Use uma cor chamativa diferente do tema, se quiser.
-                    </small>
-                  </div>
+                    setInterval(() => {{
+                        fab.animate(
+                            [
+                                {{ transform: 'scale(1)' }},
+                                {{ transform: 'scale(1.05)' }},
+                                {{ transform: 'scale(1)' }}
+                            ],
+                            {{ duration: 1000 }}
+                        );
+                    }}, 5000);
+                }}, {fab_delay * 1000});
+            }}
+        """
 
-                  {/* Tamanho do botão - SLIDER -> small/medium/large */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        color: "#374151",
-                        display: "block",
-                        marginBottom: "5px",
-                      }}
-                    >
-                      Tamanho do botão
-                    </label>
-                    <input
-                      type="range"
-                      min={0.7}
-                      max={1.5}
-                      step={0.1}
-                      value={fabSizeSlider}
-                      onChange={(e) => {
-                        const numeric = parseFloat(e.target.value);
-                        const mapped = mapSliderToFabSize(numeric);
-                        setConfig({
-                          ...config,
-                          fab_size: mapped,
-                        });
-                      }}
-                      style={{
-                        width: "100%",
-                        cursor: "pointer",
-                        accentColor: config.theme_color,
-                      }}
-                    />
-                    <small style={{ fontSize: "10px", color: "#666" }}>
-                      Ajuste o tamanho do botão no app (pequeno – grande).
-                    </small>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "15px" }}>
-                    <div style={{ flex: 1 }}>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          color: "#374151",
-                          display: "block",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Posição na Tela
-                      </label>
-                      <select
-                        value={config.fab_position ?? "right"}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_position: e.target.value,
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                          background: "white",
-                        }}
-                      >
-                        <option value="right">Direita (Padrão)</option>
-                        <option value="left">Esquerda</option>
-                      </select>
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          color: "#374151",
-                          display: "block",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Atraso ({config.fab_delay ?? 0} segundos)
-                      </label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={10}
-                        step={1}
-                        value={config.fab_delay ?? 0}
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            fab_delay: parseInt(e.target.value, 10),
-                          })
-                        }
-                        style={{
-                          width: "100%",
-                          cursor: "pointer",
-                          accentColor: config.theme_color,
-                        }}
-                      />
-                      <small style={{ fontSize: "10px", color: "#666" }}>
-                        Tempo para aparecer após abrir o site.
-                      </small>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* BARRA FIXA DE DOWNLOAD (topbar) segue igual ao original... */}
-              {/* ... (aqui você mantém o restante do código da barra fixa e configurações de cores / topbar) */}
-              {/* Para não estourar a resposta, mantive essa parte igual ao arquivo original,
-                  só precisei mexer no bloco do FAB. */}
-            </div>
-
-            {/* Coluna direita – Preview dentro do app */}
-            <div>
-              <h4
-                style={{
-                  margin: "0 0 10px 0",
-                  fontSize: "14px",
-                  textAlign: "center",
+    # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
+    bottom_bar_script = f"""
+        function isPwaMode() {{
+            try {{
+                if (window.matchMedia) {{
+                    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+                    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+                    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
                 }}
-              >
-                Widgets dentro do app
-              </h4>
-              <PhonePreview
-                appName={config.app_name}
-                themeColor={config.theme_color}
-                logoUrl={logoToUse || undefined}
-                fabEnabled={config.fab_enabled ?? false}
-                fabText={config.fab_text}
-                fabPosition={config.fab_position}
-                fabIcon={config.fab_icon}
-                fabsize={fabSizeSlider}
-                fabcolor={fabColor}
-                topbarenabled={config.topbar_enabled}
-                topbartext={config.topbar_text}
-                topbarbuttontext={config.topbar_button_text}
-                topbaricon={config.topbar_icon}
-                topbarposition={config.topbar_position}
-                topbarcolor={topbarColor}
-                topbartextcolor={topbarTextColor}
-                topbarsize={config.topbar_size}
-                storeUrl={storeUrl}
-                mode="app"
-              />
-            </div>
-          </div>
-        </div>
+                if (window.navigator.standalone === true) return true; // iOS 
+            }} catch (e) {{}}
+            return false;
+        }}
 
-        {/* CONFIGURAÇÕES APÓS INSTALAÇÃO (bottom bar) – igual ao original */}
-        {/* ... resto do código da bottom bar, sem mudanças */}
-        <div className="config-card">
-          <div className="card-header">
-            <h3 style={{ margin: 0 }}>Configurações após instalação</h3>
-            <p style={{ margin: "5px 0", fontSize: "0.9rem", color: "#6B7280" }}>
-              Personalize a barra inferior do app instalado.
-            </p>
-          </div>
-          {/* Aqui você mantém o bloco original da bottom bar (toggle + color pickers + preview) */}
-        </div>
+        function initBottomBar() {{
+            try {{
+                if (!isPwaMode()) return;
+                if (window.innerWidth > 900) return;
+                if (document.getElementById('pwa-bottom-nav')) return;
 
-        <button
-          className="save-button"
-          onClick={handleSave}
-          disabled={saving || loading}
-        >
-          {saving ? "Salvando..." : "Salvar Alterações"}
-        </button>
-      </div>
-    </div>
-  );
-}
+                var bar = document.createElement('nav');
+                bar.id = 'pwa-bottom-nav';
+                bar.style.cssText = `
+                    position:fixed;
+                    bottom:0;
+                    left:0;
+                    right:0;
+                    height:72px;
+                    background:{bottom_bar_bg};
+                    border-top:1px solid #e5e7eb;
+                    display:flex;
+                    justify-content:space-around;
+                    align-items:center;
+                    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+                    z-index:2147483647;
+                    padding-bottom: env(safe-area-inset-bottom, 0);
+                `;
+
+                try {{
+                    var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
+                    var base = parseInt(currentPadding, 10) || 0;
+                    var extra = 72;
+                    document.body.style.paddingBottom = (base + extra) + "px";
+                }} catch (e) {{}}
+
+                function createItem(svgPath, label, href) {{
+                    var btn = document.createElement('button');
+                    btn.style.cssText = `
+                        background:none;
+                        border:none;
+                        display:flex;
+                        flex-direction:column;
+                        align-items:center;
+                        justify-content:center;
+                        gap:4px;
+                        font-size:10px;
+                        color:{bottom_bar_icon_color};
+                        cursor:pointer;
+                    `;
+                    btn.onclick = function() {{
+                        try {{
+                            if (href) window.location.href = href;
+                        }} catch (e) {{}}
+                    }};
+
+                    var iconWrapper = document.createElement('div');
+                    iconWrapper.style.cssText = `
+                        width:28px;
+                        height:28px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                    `;
+
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('viewBox', '0 0 24 24');
+                    svg.setAttribute('width', '28');
+                    svg.setAttribute('height', '28');
+                    svg.style.fill = 'currentColor';
+
+                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', svgPath);
+                    svg.appendChild(path);
+                    iconWrapper.appendChild(svg);
+
+                    var text = document.createElement('span');
+                    text.textContent = label;
+                    text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
+
+                    btn.appendChild(iconWrapper);
+                    btn.appendChild(text);
+                    return btn;
+                }}
+
+                var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
+                var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
+                var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
+                var userPath = "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
+
+                bar.appendChild(createItem(homePath, "Início", "/"));
+                bar.appendChild(createItem(shopPath, "Loja", "/produtos"));
+                bar.appendChild(createItem(bellPath, "Alertas", "/notificacoes"));
+                bar.appendChild(createItem(userPath, "Conta", "/minha-conta"));
+
+                document.body.appendChild(bar);
+            }} catch (e) {{
+                console.log('Bottom bar error:', e);
+            }}
+        }}
+    """
+
+    # JS FINAL
+    js = f"""
+    (function() {{
+        console.log("🚀 PWA Loader Pro v5 - Push Force");
+
+        // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
+        var visitorId = localStorage.getItem('pwa_v_id');
+        if (!visitorId) {{
+            visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+            localStorage.setItem('pwa_v_id', visitorId);
+        }}
+
+        var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        // --- B. METADADOS ---
+        function initMeta() {{
+            var link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = '{final_backend_url}/manifest/{store_id}.json';
+            document.head.appendChild(link);
+
+            var meta = document.createElement('meta');
+            meta.name = 'theme-color';
+            meta.content = '{color}';
+            document.head.appendChild(meta);
+        }}
+
+        // --- C. ANALYTICS ---
+        function buildVisitPayload() {{
+            var payload = {{
+                store_id: '{store_id}',
+                pagina: window.location.pathname,
+                is_pwa: isApp,
+                visitor_id: visitorId
+            }};
+
+            try {{
+                if (window.LS && LS.store) {{
+                    payload.store_ls_id = LS.store.id;
+                }}
+            }} catch (e) {{}}
+
+            try {{
+                if (window.LS && LS.product) {{
+                    payload.product_id = LS.product.id;
+                    if (LS.product.name) {{
+                        payload.product_name = LS.product.name;
+                    }}
+                }}
+            }} catch (e) {{}}
+
+            try {{
+                if (window.LS && LS.cart) {{
+                    if (typeof LS.cart.subtotal !== 'undefined') {{
+                        payload.cart_total = LS.cart.subtotal;
+                    }}
+                    if (Array.isArray(LS.cart.items)) {{
+                        payload.cart_items_count = LS.cart.items.length;
+                    }}
+                }}
+            }} catch (e) {{}}
+
+            return payload;
+        }}
+
+        function trackVisit() {{
+            try {{
+                var body = buildVisitPayload();
+                fetch('{final_backend_url}/analytics/visita', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(body)
+                }});
+            }} catch (e) {{
+                console.error('Erro Analytics:', e);
+            }}
+        }}
+
+        function initAnalytics() {{
+            trackVisit();
+
+            try {{
+                var oldHref = document.location.href;
+                new MutationObserver(function() {{
+                    if (oldHref !== document.location.href) {{
+                        oldHref = document.location.href;
+                        trackVisit();
+                    }}
+                }}).observe(document.querySelector('body'), {{ childList: true, subtree: true }});
+            }} catch (e) {{}}
+        }}
+
+        // --- D. INSTALAÇÃO ---
+        function initInstallCapture() {{
+            window.deferredPrompt = null;
+            window.addEventListener('beforeinstallprompt', function(e) {{
+                e.preventDefault();
+                window.deferredPrompt = e;
+            }});
+        }}
+
+        // --- E. PUSH ---
+        const publicVapidKey = "{VAPID_PUBLIC_KEY}";
+
+        function urlBase64ToUint8Array(base64String) {{
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {{
+                outputArray[i] = rawData.charCodeAt(i);
+            }}
+            return outputArray;
+        }}
+
+        async function subscribePush() {{
+            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
+                console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
+                return;
+            }}
+            try {{
+                console.log("PUSH: registrando Service Worker em: /service-worker.js");
+                const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
+                await navigator.serviceWorker.ready;
+
+                console.log("PUSH: chamando pushManager.subscribe...");
+                const subscription = await registration.pushManager.subscribe({{
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                }});
+
+                console.log("📡 Enviando inscrição Push para backend em:", '{final_backend_url}/push/subscribe');
+                const res = await fetch('{final_backend_url}/push/subscribe', {{
+                    method: 'POST',
+                    body: JSON.stringify({{
+                        subscription: subscription,
+                        store_id: '{store_id}',
+                        visitor_id: visitorId
+                    }}),
+                    headers: {{ 'Content-Type': 'application/json' }}
+                }});
+
+                console.log("PUSH /subscribe status:", res.status);
+                let json = null;
+                try {{
+                    json = await res.json();
+                }} catch (e) {{
+                    console.log("PUSH /subscribe: não conseguiu parsear JSON", e);
+                }}
+                console.log("✅ Push Resultado:", json);
+
+            }} catch (err) {{
+                console.error("❌ Erro Push:", err);
+            }}
+        }}
+
+        function checkNotificationPermission() {{
+            if (!('Notification' in window)) {{
+                return 'unsupported';
+            }}
+            return Notification.permission;
+        }}
+
+        async function askNotificationAndSubscribe() {{
+            if (!('Notification' in window)) return;
+
+            const current = Notification.permission;
+
+            console.log("PUSH: permissão atual =", current);
+
+            if (current === 'granted') {{
+                console.log("PUSH: permissão já concedida, inscrevendo...");
+                subscribePush();
+                return;
+            }}
+
+            if (current === 'denied') {{
+                alert('As notificações estão bloqueadas neste dispositivo. Ative nas configurações do navegador para receber atualizações.');
+                return;
+            }}
+
+            console.log("PUSH: permissão default, pedindo agora...");
+            const result = await Notification.requestPermission();
+            console.log("PUSH: resultado do requestPermission =", result);
+            if (result === 'granted') {{
+                subscribePush();
+            }} else {{
+                console.log('PUSH: usuário não concedeu a permissão:', result);
+            }}
+        }}
+
+        function showNotificationTopBar() {{
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'granted') return;
+
+            var existingBar = document.getElementById('pwa-notification-bar');
+            if (existingBar) return;
+
+            var bar = document.createElement('div');
+            bar.id = 'pwa-notification-bar';
+            bar.style.cssText = `
+                position:fixed;
+                top:0;
+                left:0;
+                right:0;
+                z-index:2147483647;
+                background:#111827;
+                color:#F9FAFB;
+                padding:10px 14px;
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                font-family:sans-serif;
+                font-size:13px;
+                box-shadow:0 2px 8px rgba(0,0,0,0.35);
+            `;
+
+            bar.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:16px;">🔔</span>
+                  <span>Ative as notificações para receber atualizações de pedidos, cupons e novidades.</span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button id="pwa-notif-allow" style="padding:6px 10px; border-radius:6px; border:none; background:#22C55E; color:#fff; font-weight:bold; font-size:12px; cursor:pointer;">Ativar</button>
+                  <button id="pwa-notif-close" style="padding:6px 8px; border-radius:6px; border:none; background:transparent; color:#9CA3AF; font-size:12px; cursor:pointer;">Agora não</button>
+                </div>
+            `;
+
+            document.body.appendChild(bar);
+
+            document.getElementById('pwa-notif-allow').onclick = function () {{
+                askNotificationAndSubscribe();
+                bar.remove();
+            }};
+
+            document.getElementById('pwa-notif-close').onclick = function () {{
+                bar.remove();
+            }};
+        }}
+
+        function initNotificationBar() {{
+            if (isApp) {{
+                showNotificationTopBar();
+            }}
+        }}
+
+        // --- VARIANTES ---
+        function initVariantTracking() {{
+            try {{
+                if (window.LS && typeof LS.registerOnChangeVariant === 'function') {{
+                    LS.registerOnChangeVariant(function(variant) {{
+                        try {{
+                            var productId = null;
+                            var productName = null;
+
+                            try {{
+                                if (LS.product) {{
+                                    productId = LS.product.id || null;
+                                    productName = LS.product.name || null;
+                                }}
+                            }} catch (e) {{}}
+
+                            var payload = {{
+                                store_id: '{store_id}',
+                                visitor_id: visitorId,
+                                product_id: productId ? String(productId) : '',
+                                variant_id: variant && variant.id ? String(variant.id) : '',
+                                variant_name: variant && variant.name ? String(variant.name) : productName || null,
+                                price: variant && typeof variant.price !== 'undefined' ? String(variant.price) : null,
+                                stock: variant && typeof variant.stock !== 'undefined' ? variant.stock : null
+                            }};
+
+                            if (!payload.variant_id) {{
+                                return;
+                            }}
+
+                            fetch('{final_backend_url}/analytics/variant', {{
+                                method: 'POST',
+                                headers: {{ 'Content-Type': 'application/json' }},
+                                body: JSON.stringify(payload)
+                            }});
+                        }} catch (err) {{
+                            console.log('Variant event error:', err);
+                        }}
+                    }});
+                }}
+            }} catch (e) {{}}
+        }}
+
+        // --- VENDAS ---
+        function initSalesTracking() {{
+            try {{
+                if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
+                    var val = '0.00';
+
+                    if (window.dataLayer) {{
+                        for (var i = 0; i < window.dataLayer.length; i++) {{
+                            if (window.dataLayer[i].transactionTotal) {{
+                                val = window.dataLayer[i].transactionTotal;
+                                break;
+                            }}
+                            if (window.dataLayer[i].value) {{
+                                val = window.dataLayer[i].value;
+                                break;
+                            }}
+                        }}
+                    }}
+
+                    var oid = window.location.href.split('/').pop();
+                    if (!localStorage.getItem('venda_' + oid) && parseFloat(val) > 0) {{
+                        fetch('{final_backend_url}/analytics/venda', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{
+                                store_id: '{store_id}',
+                                valor: val.toString(),
+                                visitor_id: visitorId
+                            }})
+                        }});
+                        localStorage.setItem('venda_' + oid, 'true');
+                    }}
+                }}
+            }} catch (e) {{
+                console.log('Venda tracking error:', e);
+            }}
+        }}
+
+        // --- INICIALIZAÇÃO ---
+        try {{
+            initMeta();
+            initInstallCapture();
+            initAnalytics();
+            if (isApp) {{
+                initNotificationBar();
+            }}
+        }} catch (e) {{
+            console.log('Critical block error:', e);
+        }}
+
+        // Bloco diferido: FAB e tracking
+        setTimeout(function () {{
+            try {{
+                {fab_script}
+                if (typeof initFab === 'function') {{
+                    initFab();
+                }}
+                initVariantTracking();
+                initSalesTracking();
+            }} catch (e) {{
+                console.log('Deferred block error (FAB/Analytics):', e);
+            }}
+        }}, 800);
+
+        // Bottom bar: inicializa assim que o DOM estiver pronto
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', function() {{
+                try {{
+                    {bottom_bar_script}
+                    if (typeof initBottomBar === 'function') {{
+                        initBottomBar();
+                    }}
+                }} catch (e) {{
+                    console.log('Bottom bar init error:', e);
+                }}
+            }});
+        }} else {{
+            try {{
+                {bottom_bar_script}
+                if (typeof initBottomBar === 'function') {{
+                    initBottomBar();
+                }}
+            }} catch (e) {{
+                console.log('Bottom bar init error:', e);
+            }}
+        }}
+    }})();
+    """
+
+    return Response(content=js, media_type="application/javascript")
