@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, desc
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from pywebpush import webpush, WebPushException
@@ -28,7 +28,8 @@ except:
 
 # URL Backend
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
-if BACKEND_URL and not BACKEND_URL.startswith("http"): BACKEND_URL = f"https://{BACKEND_URL}"
+if BACKEND_URL and not BACKEND_URL.startswith("http"):
+    BACKEND_URL = f"https://{BACKEND_URL}"
 
 # --- MODELOS DE ENTRADA ---
 class VendaPayload(BaseModel):
@@ -57,8 +58,9 @@ class PushSendPayload(BaseModel):
 def send_webpush(subscription_info, message_body):
     """Envia uma notificação unitária via pywebpush"""
     try:
-        if not VAPID_PRIVATE_KEY: return False
-        
+        if not VAPID_PRIVATE_KEY:
+            return False
+
         webpush(
             subscription_info=subscription_info,
             data=json.dumps(message_body),
@@ -77,9 +79,11 @@ def send_webpush(subscription_info, message_body):
 @router.get("/loader.js", include_in_schema=False)
 def get_loader(store_id: str, db: Session = Depends(get_db)):
     # 1. Busca Configurações da Loja
-    try: config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
-    except: config = None
-    
+    try:
+        config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    except:
+        config = None
+
     color = config.theme_color if config else "#000000"
     fab_enabled = config.fab_enabled if config else False
     fab_text = config.fab_text if config else "Baixar App"
@@ -103,11 +107,11 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v3 (Push Enabled)");
-        
+
         var visitorId = localStorage.getItem('pwa_v_id');
         if(!visitorId) {{ visitorId = 'v_' + Math.random().toString(36).substr(2, 9); localStorage.setItem('pwa_v_id', visitorId); }}
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        
+
         var link = document.createElement('link'); link.rel = 'manifest'; link.href = '{BACKEND_URL}/manifest/{store_id}.json'; document.head.appendChild(link);
         var meta = document.createElement('meta'); meta.name = 'theme-color'; meta.content = '{color}'; document.head.appendChild(meta);
 
@@ -115,15 +119,15 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
             try {{ fetch('{BACKEND_URL}/stats/visita', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }}) }}); }} catch(e) {{}}
         }}
         trackVisit();
-        
+
         var oldHref = document.location.href;
         new MutationObserver(function() {{ if (oldHref !== document.location.href) {{ oldHref = document.location.href; trackVisit(); }} }}).observe(document.querySelector("body"), {{ childList: true, subtree: true }});
 
         var deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {{ e.preventDefault(); deferredPrompt = e; }});
         window.installPWA = function() {{
-            if (deferredPrompt) {{ deferredPrompt.prompt(); }} 
-            else {{ alert("Para instalar:\\\\\\\\\\\\\\\\nAndroid: Menu > Adicionar à Tela\\\\\\\\\\\\\\\\niOS: Compartilhar > Adicionar à Tela"); }}
+            if (deferredPrompt) {{ deferredPrompt.prompt(); }}
+            else {{ alert("Para instalar:\\nAndroid: Menu > Adicionar à Tela\\niOS: Compartilhar > Adicionar à Tela"); }}
         }};
 
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
@@ -172,18 +176,28 @@ def get_loader(store_id: str, db: Session = Depends(get_db)):
     """
     return Response(content=js, media_type="application/javascript")
 
-
 # --- ROTAS DE REGISTRO (Analytics) ---
 
 @router.post("/visita")
 def registrar_visita(payload: VisitaPayload, db: Session = Depends(get_db)):
-    db.add(VisitaApp(store_id=payload.store_id, pagina=payload.pagina, is_pwa=payload.is_pwa, visitor_id=payload.visitor_id, data=datetime.now().isoformat()))
+    db.add(VisitaApp(
+        store_id=payload.store_id,
+        pagina=payload.pagina,
+        is_pwa=payload.is_pwa,
+        visitor_id=payload.visitor_id,
+        data=datetime.now().isoformat()
+    ))
     db.commit()
     return {"status": "ok"}
 
 @router.post("/venda")
 def registrar_venda(payload: VendaPayload, db: Session = Depends(get_db)):
-    db.add(VendaApp(store_id=payload.store_id, valor=payload.valor, visitor_id=payload.visitor_id, data=datetime.now().isoformat()))
+    db.add(VendaApp(
+        store_id=payload.store_id,
+        valor=payload.valor,
+        visitor_id=payload.visitor_id,
+        data=datetime.now().isoformat()
+    ))
     db.commit()
     return {"status": "ok"}
 
@@ -195,7 +209,7 @@ def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db))
         sub_data = payload.subscription
         endpoint = sub_data.get("endpoint")
         keys = sub_data.get("keys", {})
-        
+
         if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
             return {"status": "error", "message": "Dados inválidos"}
 
@@ -211,7 +225,7 @@ def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db))
             ))
             db.commit()
             return {"status": "subscribed"}
-        
+
         return {"status": "already_subscribed"}
     except Exception as e:
         print(f"Erro Subscribe: {e}")
@@ -221,27 +235,44 @@ def subscribe_push(payload: PushSubscribePayload, db: Session = Depends(get_db))
 @router.get("/admin/push-history")
 def get_push_history(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
     """Retorna o histórico de campanhas enviadas"""
-    history = db.query(PushHistory).filter(PushHistory.store_id == store_id).order_by(PushHistory.id.desc()).all()
+    history = db.query(PushHistory).filter(
+        PushHistory.store_id == store_id
+    ).order_by(PushHistory.id.desc()).all()
     return history
 
 @router.post("/admin/send-push")
 def send_push_campaign(payload: PushSendPayload, store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
     """Envia notificação para todos e salva no histórico"""
-    subs = db.query(PushSubscription).filter(PushSubscription.store_id == store_id).all()
-    
+    subs = db.query(PushSubscription).filter(
+        PushSubscription.store_id == store_id
+    ).all()
+
     # Prepara a mensagem
-    message_body = { "title": payload.title, "body": payload.message, "url": payload.url, "icon": payload.icon }
-    sent_count = 0; delete_ids = []
+    message_body = {
+        "title": payload.title,
+        "body": payload.message,
+        "url": payload.url,
+        "icon": payload.icon
+    }
+    sent_count = 0
+    delete_ids = []
 
     # Envia para cada inscrito
     if subs:
         for sub in subs:
-            res = send_webpush({"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, message_body)
-            if res == True: sent_count += 1
-            elif res == "DELETE": delete_ids.append(sub.id)
+            res = send_webpush(
+                {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                message_body
+            )
+            if res is True:
+                sent_count += 1
+            elif res == "DELETE":
+                delete_ids.append(sub.id)
 
         if delete_ids:
-            db.query(PushSubscription).filter(PushSubscription.id.in_(delete_ids)).delete(synchronize_session=False)
+            db.query(PushSubscription).filter(
+                PushSubscription.id.in_(delete_ids)
+            ).delete(synchronize_session=False)
             db.commit()
 
     # --- SALVA NO HISTÓRICO (NOVO!) ---
@@ -250,7 +281,7 @@ def send_push_campaign(payload: PushSendPayload, store_id: str = Depends(get_cur
         title=payload.title,
         message=payload.message,
         url=payload.url,
-        sent_count=sent_count, # Salva quantos receberam de verdade
+        sent_count=sent_count,  # Salva quantos receberam de verdade
         created_at=datetime.now().isoformat()
     )
     db.add(history_item)
@@ -264,24 +295,108 @@ def get_dashboard_stats(store_id: str = Depends(get_current_store), db: Session 
     vendas = db.query(VendaApp).filter(VendaApp.store_id == store_id).all()
     total_receita = sum([float(v.valor) for v in vendas])
     qtd_vendas = len(vendas)
-    visitantes_unicos = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id).scalar() or 0
-    qtd_checkout = db.query(func.count(distinct(VisitaApp.visitor_id))).filter(VisitaApp.store_id == store_id, (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho"))).scalar() or 0
+
+    visitantes_unicos = db.query(
+        func.count(distinct(VisitaApp.visitor_id))
+    ).filter(VisitaApp.store_id == store_id).scalar() or 0
+
+    # NOVO: separa visitas/vendas PWA vs Web
+    visitas_pwa = db.query(
+        func.count(distinct(VisitaApp.visitor_id))
+    ).filter(
+        VisitaApp.store_id == store_id,
+        VisitaApp.is_pwa == True
+    ).scalar() or 0
+
+    visitas_web = max(0, visitantes_unicos - visitas_pwa)
+
+    vendas_pwa = db.query(func.count(VendaApp.id)).filter(
+        VendaApp.store_id == store_id,
+        VendaApp.visitor_id.in_(
+            db.query(VisitaApp.visitor_id).filter(
+                VisitaApp.store_id == store_id,
+                VisitaApp.is_pwa == True
+            )
+        )
+    ).scalar() or 0
+
+    vendas_site = max(0, qtd_vendas - vendas_pwa)
+
+    qtd_checkout = db.query(
+        func.count(distinct(VisitaApp.visitor_id))
+    ).filter(
+        VisitaApp.store_id == store_id,
+        (VisitaApp.pagina.contains("checkout") | VisitaApp.pagina.contains("carrinho"))
+    ).scalar() or 0
+
     abandonos = max(0, qtd_checkout - qtd_vendas)
     ticket_medio = total_receita / max(1, qtd_vendas) if qtd_vendas > 0 else 0
-    subquery = db.query(VendaApp.visitor_id).filter(VendaApp.store_id == store_id).group_by(VendaApp.visitor_id).having(func.count(VendaApp.id) > 1).subquery()
-    recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
-    pageviews = db.query(VisitaApp).filter(VisitaApp.store_id == store_id).count()
-    top_paginas = [p[0] for p in db.query(VisitaApp.pagina, func.count(VisitaApp.pagina).label('total')).filter(VisitaApp.store_id == store_id).group_by(VisitaApp.pagina).order_by(desc('total')).limit(5).all()]
+
+    subquery = db.query(VendaApp.visitor_id).filter(
+        VendaApp.store_id == store_id
+    ).group_by(
+        VendaApp.visitor_id
+    ).having(
+        func.count(VendaApp.id) > 1
+    ).subquery()
+
+    recorrentes = db.query(
+        func.count(subquery.c.visitor_id)
+    ).scalar() or 0
+
+    pageviews = db.query(VisitaApp).filter(
+        VisitaApp.store_id == store_id
+    ).count()
+
+    top_paginas = [
+        p[0] for p in db.query(
+            VisitaApp.pagina,
+            func.count(VisitaApp.pagina).label('total')
+        ).filter(
+            VisitaApp.store_id == store_id
+        ).group_by(
+            VisitaApp.pagina
+        ).order_by(
+            desc('total')
+        ).limit(5).all()
+    ]
 
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
-        "instalacoes": visitantes_unicos,
-        "carrinhos_abandonados": { "valor": abandonos * ticket_medio, "qtd": abandonos },
-        "visualizacoes": { "pageviews": pageviews, "tempo_medio": "--", "top_paginas": top_paginas },
-        "funil": { "visitas": visitantes_unicos, "carrinho": qtd_checkout, "checkout": qtd_vendas },
-        "recorrencia": { "clientes_2x": recorrentes, "taxa_recompra": round((recorrentes / max(1, qtd_vendas) * 100), 1) },
-        "ticket_medio": { "app": round(ticket_medio, 2), "site": 0.0 },
-        "taxa_conversao": { "app": round((qtd_vendas / max(1, visitantes_unicos) * 100), 1), "site": 0.0 },
-        "economia_ads": visitantes_unicos * 0.50
+        # agora considera “instalações” como usuários do app/PWA
+        "instalacoes": visitas_pwa,
+        "carrinhos_abandonados": {
+            "valor": abandonos * ticket_medio,
+            "qtd": abandonos
+        },
+        "visualizacoes": {
+            "pageviews": pageviews,
+            "tempo_medio": "--",
+            "top_paginas": top_paginas
+        },
+        "funil": {
+            "visitas": visitantes_unicos,
+            "carrinho": qtd_checkout,
+            "checkout": qtd_vendas
+        },
+        "recorrencia": {
+            "clientes_2x": recorrentes,
+            "taxa_recompra": round((recorrentes / max(1, qtd_vendas) * 100), 1)
+        },
+        "ticket_medio": {
+            "app": round(ticket_medio, 2),
+            "site": 0.0
+        },
+        "taxa_conversao": {
+            "app": round((vendas_pwa / max(1, visitas_pwa) * 100), 1),
+            "site": round((vendas_site / max(1, visitas_web) * 100), 1) if visitantes_unicos > 0 else 0.0
+        },
+        "economia_ads": visitantes_unicos * 0.50,
+        # opcional: ajuda o front se quiser mostrar visitas separadas
+        "visitas": {
+            "app": visitas_pwa,
+            "site": visitas_web,
+            "total": visitantes_unicos
+        }
     }
