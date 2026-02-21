@@ -151,13 +151,42 @@ def get_dashboard_stats(
     total_receita = sum(float(v.valor) for v in vendas)
     qtd_vendas = len(vendas)
 
-    # VISITANTES ÚNICOS
+    # VISITANTES ÚNICOS (todos)
     visitantes_unicos = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(VisitaApp.store_id == store_id)
         .scalar()
         or 0
     )
+
+    # NOVO: VISITAS PWA vs SITE (apenas adicionando info extra)
+    visitas_pwa = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+        )
+        .scalar()
+        or 0
+    )
+    visitas_site = max(0, visitantes_unicos - visitas_pwa)
+
+    # NOVO: VENDAS PWA vs SITE (apenas info extra)
+    vendas_pwa = (
+        db.query(func.count(VendaApp.id))
+        .filter(
+            VendaApp.store_id == store_id,
+            VendaApp.visitor_id.in_(
+                db.query(VisitaApp.visitor_id).filter(
+                    VisitaApp.store_id == store_id,
+                    VisitaApp.is_pwa == True,
+                )
+            ),
+        )
+        .scalar()
+        or 0
+    )
+    vendas_site = max(0, qtd_vendas - vendas_pwa)
 
     # CHECKOUT / CARRINHO
     qtd_checkout = (
@@ -238,7 +267,7 @@ def get_dashboard_stats(
     # TEMPO MÉDIO NO APP (PWA) – SESSÃO MÁX 5 MIN ENTRE PÁGINAS
     from datetime import datetime as _dt
 
-    visitas_pwa = (
+    visitas_pwa_list = (
         visitas_qs.filter(
             VisitaApp.is_pwa == True,
             VisitaApp.visitor_id.isnot(None),
@@ -255,7 +284,7 @@ def get_dashboard_stats(
 
     LIMITE_SESSAO = 5 * 60  # 5 minutos
 
-    for v in visitas_pwa:
+    for v in visitas_pwa_list:
         try:
             dt = _dt.fromisoformat(v.data)
         except Exception:
@@ -279,6 +308,7 @@ def get_dashboard_stats(
         tempo_medio_str = "--"
 
     return {
+        # CAMPOS ANTIGOS (inalterados)
         "receita": total_receita,
         "vendas": qtd_vendas,
         "instalacoes": visitantes_unicos,
@@ -313,4 +343,11 @@ def get_dashboard_stats(
             "site": 0.0,
         },
         "economia_ads": visitantes_unicos * 0.50,
+        # NOVO BLOCO EXTRA (não usado pelo front ainda, não quebra nada)
+        "extra_pwa": {
+            "visitas_pwa": visitas_pwa,
+            "visitas_site": visitas_site,
+            "vendas_pwa": vendas_pwa,
+            "vendas_site": vendas_site,
+        },
     }
