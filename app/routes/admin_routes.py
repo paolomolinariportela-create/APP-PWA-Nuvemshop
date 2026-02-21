@@ -23,6 +23,18 @@ class ConfigPayload(BaseModel):
     fab_position: Optional[str] = "right"
     fab_icon: Optional[str] = "📲"
     fab_delay: Optional[int] = 0
+    fab_color: Optional[str] = "#2563EB"
+    fab_size: Optional[str] = "medium"
+
+    # Barra / banner (top/bottom)
+    topbar_enabled: Optional[bool] = False
+    topbar_text: Optional[str] = "Baixe nosso app"
+    topbar_button_text: Optional[str] = "Baixar"
+    topbar_icon: Optional[str] = "📲"
+    topbar_position: Optional[str] = "bottom"
+    topbar_color: Optional[str] = "#111827"
+    topbar_text_color: Optional[str] = "#FFFFFF"
+    topbar_size: Optional[str] = "medium"
 
     # Bottom bar
     bottom_bar_bg: Optional[str] = "#FFFFFF"
@@ -47,6 +59,16 @@ def get_config(
             "fab_position": "right",
             "fab_icon": "📲",
             "fab_delay": 0,
+            "fab_color": "#2563EB",
+            "fab_size": "medium",
+            "topbar_enabled": False,
+            "topbar_text": "Baixe nosso app",
+            "topbar_button_text": "Baixar",
+            "topbar_icon": "📲",
+            "topbar_position": "bottom",
+            "topbar_color": "#111827",
+            "topbar_text_color": "#FFFFFF",
+            "topbar_size": "medium",
             "bottom_bar_bg": "#FFFFFF",
             "bottom_bar_icon_color": "#6B7280",
         }
@@ -62,6 +84,16 @@ def get_config(
         "fab_position": config.fab_position or "right",
         "fab_icon": config.fab_icon or "📲",
         "fab_delay": config.fab_delay or 0,
+        "fab_color": getattr(config, "fab_color", "#2563EB") or "#2563EB",
+        "fab_size": getattr(config, "fab_size", "medium") or "medium",
+        "topbar_enabled": getattr(config, "topbar_enabled", False),
+        "topbar_text": getattr(config, "topbar_text", "Baixe nosso app") or "Baixe nosso app",
+        "topbar_button_text": getattr(config, "topbar_button_text", "Baixar") or "Baixar",
+        "topbar_icon": getattr(config, "topbar_icon", "📲") or "📲",
+        "topbar_position": getattr(config, "topbar_position", "bottom") or "bottom",
+        "topbar_color": getattr(config, "topbar_color", "#111827") or "#111827",
+        "topbar_text_color": getattr(config, "topbar_text_color", "#FFFFFF") or "#FFFFFF",
+        "topbar_size": getattr(config, "topbar_size", "medium") or "medium",
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
         "bottom_bar_icon_color": getattr(
             config, "bottom_bar_icon_color", "#6B7280"
@@ -115,6 +147,18 @@ def save_config(
     config.fab_position = payload.fab_position
     config.fab_icon = payload.fab_icon
     config.fab_delay = payload.fab_delay
+    config.fab_color = payload.fab_color
+    config.fab_size = payload.fab_size
+
+    # Topbar / banner
+    config.topbar_enabled = payload.topbar_enabled
+    config.topbar_text = payload.topbar_text
+    config.topbar_button_text = payload.topbar_button_text
+    config.topbar_icon = payload.topbar_icon
+    config.topbar_position = payload.topbar_position
+    config.topbar_color = payload.topbar_color
+    config.topbar_text_color = payload.topbar_text_color
+    config.topbar_size = payload.topbar_size
 
     # Bottom bar
     config.bottom_bar_bg = payload.bottom_bar_bg
