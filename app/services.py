@@ -23,7 +23,7 @@ SEU_SITE_VENDAS = "https://www.seusite.com.br"
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
-# Base da API Nuvemshop/Tiendanube[web:1502]
+# Base da API Nuvemshop/Tiendanube
 NUVEMSHOP_API_URL = "https://api.nuvemshop.com.br/v1"
 
 
@@ -236,11 +236,17 @@ def create_landing_page_internal(store_id: str, encrypted_access_token: str, col
 # --- NOVO: sincronizar logo da Nuvemshop e salvar em Loja.logo_url ---
 def sync_store_logo_from_nuvemshop(db: Session, loja: Loja) -> None:
     """
-    Busca a logo da loja na Nuvemshop (GET /{store_id}/store)[web:1500]
+    Busca a logo da loja na Nuvemshop (GET /{store_id}/store)
     e salva em Loja.logo_url.
     """
     if not loja or not loja.access_token or not loja.store_id:
         print("SYNC LOGO: loja, access_token ou store_id ausente")
+        return
+
+    # Descriptografa o token salvo no banco
+    raw_token = decrypt_token(loja.access_token)
+    if not raw_token:
+        print("SYNC LOGO: não conseguiu descriptografar o token")
         return
 
     try:
@@ -249,8 +255,8 @@ def sync_store_logo_from_nuvemshop(db: Session, loja: Loja) -> None:
         resp = requests.get(
             url,
             headers={
-                "Authentication": f"bearer {loja.access_token}",  # token da app[web:1502]
-                "User-Agent": "app-builder (you@example.com)",    # troque para seu app/email
+                "Authentication": f"bearer {raw_token}",
+                "User-Agent": "app-builder (you@example.com)",  # ajuste e-mail/app
             },
             timeout=5,
         )
@@ -261,7 +267,7 @@ def sync_store_logo_from_nuvemshop(db: Session, loja: Loja) -> None:
             return
 
         data = resp.json()
-        raw_logo = data.get("logo")  # Store logo URL, começando com //[web:1500]
+        raw_logo = data.get("logo")
         print("SYNC LOGO: campo logo =", raw_logo)
 
         if raw_logo:
