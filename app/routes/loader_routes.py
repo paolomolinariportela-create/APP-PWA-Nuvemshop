@@ -47,18 +47,27 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_delay = getattr(config, "fab_delay", 0) or 0
 
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
-    fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # Largura x altura por tamanho (pílula)
-    if fab_size == "small":
-        fab_width = 54
-        fab_height = 46
-    elif fab_size == "large":
-        fab_width = 120
-        fab_height = 60
-    else:  # medium
-        fab_width = 90
-        fab_height = 54
+# Fator numérico vindo do painel (0.7–1.5). Se vier string, converte.
+raw_factor = getattr(config, "fab_size", 1.0) if config else 1.0
+try:
+    fab_factor = float(raw_factor)
+except (TypeError, ValueError):
+    fab_factor = 1.0
+
+# Clampa para evitar exageros
+if fab_factor < 0.7:
+    fab_factor = 0.7
+if fab_factor > 1.5:
+    fab_factor = 1.5
+
+# Tamanho base em px (modelo comum de mercado: pílula média)
+base_width = 90   # largura base do botão
+base_height = 54  # altura base do botão
+
+fab_width = int(base_width * fab_factor)
+fab_height = int(base_height * fab_factor)
+
 
     # Distância maior das bordas
     offset_px = 56
@@ -94,10 +103,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     textSpan.textContent = "{fab_text}";
                     textSpan.style.whiteSpace = "nowrap";
 
-                    var currentSize = "{fab_size}";
-                    if (currentSize === "small") {{
-                        textSpan.style.display = "none";
-                    }}
+                    
 
                     fab.appendChild(iconSpan);
                     fab.appendChild(textSpan);
