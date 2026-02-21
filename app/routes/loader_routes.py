@@ -49,17 +49,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
+    # Largura x altura por tamanho (pílula)
     if fab_size == "small":
-         fab_width = 54
-         fab_height = 46
+        fab_width = 54
+        fab_height = 46
     elif fab_size == "large":
-         fab_width = 120
-         fab_height = 60
+        fab_width = 120
+        fab_height = 60
     else:  # medium
         fab_width = 90
         fab_height = 54
-    }
-    fab_px = size_map.get(fab_size, 72)
 
     # Distância maior das bordas
     offset_px = 56
