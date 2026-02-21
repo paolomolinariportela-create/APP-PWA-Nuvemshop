@@ -30,7 +30,10 @@ class ConfigPayload(BaseModel):
 
 
 @router.get("/config")
-def get_config(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+def get_config(
+    store_id: str = Depends(get_current_store),
+    db: Session = Depends(get_db),
+):
     config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     if not config:
         # Retorna padrão se não existir
@@ -60,18 +63,38 @@ def get_config(store_id: str = Depends(get_current_store), db: Session = Depends
         "fab_icon": config.fab_icon or "📲",
         "fab_delay": config.fab_delay or 0,
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
-        "bottom_bar_icon_color": getattr(config, "bottom_bar_icon_color", "#6B7280") or "#6B7280",
+        "bottom_bar_icon_color": getattr(
+            config, "bottom_bar_icon_color", "#6B7280"
+        ) or "#6B7280",
     }
 
 
 @router.get("/store-info")
-def get_store_info(store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+def get_store_info(
+    store_id: str = Depends(get_current_store),
+    db: Session = Depends(get_db),
+):
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
-    return {"url": loja.url if loja else ""}
+    if not loja:
+        return {"url": "", "logo_url": ""}
+
+    store_url = loja.url or ""
+
+    # Ajuste aqui o nome do campo se no modelo Loja for diferente
+    logo_url = getattr(loja, "logo_url", None)
+
+    return {
+        "url": store_url,
+        "logo_url": logo_url or "",
+    }
 
 
 @router.post("/config")
-def save_config(payload: ConfigPayload, store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+def save_config(
+    payload: ConfigPayload,
+    store_id: str = Depends(get_current_store),
+    db: Session = Depends(get_db),
+):
     config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     if not config:
         config = AppConfig(store_id=store_id)
@@ -98,7 +121,11 @@ def save_config(payload: ConfigPayload, store_id: str = Depends(get_current_stor
 
 
 @router.post("/create-page")
-def manual_create_page(payload: ConfigPayload, store_id: str = Depends(get_current_store), db: Session = Depends(get_db)):
+def manual_create_page(
+    payload: ConfigPayload,
+    store_id: str = Depends(get_current_store),
+    db: Session = Depends(get_db),
+):
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
     if not loja:
         return {"error": "Loja não encontrada"}
