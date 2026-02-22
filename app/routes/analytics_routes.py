@@ -151,7 +151,7 @@ def get_dashboard_stats(
     total_receita = sum(float(v.valor) for v in vendas)
     qtd_vendas = len(vendas)
 
-    # VISITANTES ÚNICOS (todos)
+    # VISITANTES ÚNICOS (todos, site + PWA)
     visitantes_unicos = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(VisitaApp.store_id == store_id)
@@ -188,7 +188,7 @@ def get_dashboard_stats(
     )
     vendas_site = max(0, qtd_vendas - vendas_pwa)
 
-    # CHECKOUT / CARRINHO
+    # CHECKOUT / CARRINHO (todos)
     qtd_checkout = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
@@ -215,24 +215,13 @@ def get_dashboard_stats(
     )
     recorrentes = db.query(func.count(subquery.c.visitor_id)).scalar() or 0
 
-    # PAGEVIEWS E TOP PÁGINAS
+    # BASE DE VISITAS (todos)
     visitas_qs = db.query(VisitaApp).filter(VisitaApp.store_id == store_id)
-    pageviews = visitas_qs.count()
 
-    top_paginas = [
-        p[0]
-        for p in db.query(
-            VisitaApp.pagina,
-            func.count(VisitaApp.pagina).label("total"),
-        )
-        .filter(VisitaApp.store_id == store_id)
-        .group_by(VisitaApp.pagina)
-        .order_by(desc("total"))
-        .limit(5)
-        .all()
-    ]
+    # PAGEVIEWS E TOP PÁGINAS SOMENTE PWA
+    visitas_pwa_qs = visitas_qs.filter(VisitaApp.is_pwa == True)
+    pageviews_pwa = visitas_pwa_qs.count()
 
-    # NOVO: Top páginas apenas do APP (PWA)
     top_paginas_pwa = [
         p[0]
         for p in db.query(
@@ -281,14 +270,23 @@ def get_dashboard_stats(
     else:
         crescimento_instalacoes_7d = 0.0
 
+    # INSTALAÇÕES ATIVAS PWA (visitantes que passaram pela página 'install' em modo PWA)
+    instalacoes_pwa = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+            VisitaApp.pagina == "install",
+        )
+        .scalar()
+        or 0
+    )
+
     # TEMPO MÉDIO NO APP (PWA) – SESSÃO MÁX 5 MIN ENTRE PÁGINAS
     from datetime import datetime as _dt
 
     visitas_pwa_list = (
-        visitas_qs.filter(
-            VisitaApp.is_pwa == True,
-            VisitaApp.visitor_id.isnot(None),
-        )
+        visitas_pwa_qs.filter(VisitaApp.visitor_id.isnot(None))
         .order_by(VisitaApp.visitor_id, VisitaApp.data)
         .all()
     )
@@ -327,16 +325,19 @@ def get_dashboard_stats(
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
-        "instalacoes": visitantes_unicos,
+        # agora só instalações PWA
+        "instalacoes": instalacoes_pwa,
         "crescimento_instalacoes_7d": crescimento_instalacoes_7d,
         "carrinhos_abandonados": {
             "valor": abandonos * ticket_medio,
             "qtd": abandonos,
         },
         "visualizacoes": {
-            "pageviews": pageviews,
+            # só pageviews PWA
+            "pageviews": pageviews_pwa,
             "tempo_medio": tempo_medio_str,
-            "top_paginas": top_paginas,
+            # top páginas também só PWA
+            "top_paginas": top_paginas_pwa,
             "top_paginas_pwa": top_paginas_pwa,
         },
         "funil": {
