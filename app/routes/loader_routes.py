@@ -48,6 +48,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
+    # NOVO: imagem de fundo do FAB (se quiser usar depois)
+    fab_background_image_url = getattr(config, "fab_background_image_url", "") or ""
+
     if fab_size == "xs":
         fab_width = 54
         fab_height = 46
@@ -78,6 +81,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # NOVOS CAMPOS: cores independentes do botão da barra
     topbar_button_bg_color = getattr(config, "topbar_button_bg_color", None) or "#FBBF24"
     topbar_button_text_color = getattr(config, "topbar_button_text_color", None) or "#111827"
+    # NOVO: imagem de fundo da barra
+    topbar_background_image_url = getattr(config, "topbar_background_image_url", "") or ""
+
+    # --- POPUP DE INSTALAÇÃO ---
+    popup_enabled = bool(getattr(config, "popup_enabled", False)) if config else False
+    popup_image_url = getattr(config, "popup_image_url", "") or ""
 
     # --- FAB SCRIPT ---
     fab_script = ""
@@ -150,8 +159,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\\\\\\\\\')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\\\\\\\\\')
+
+        # se quiser usar imagem de fundo, dá pra incluir aqui
+        background_style = (
+            f"background-image:url('{topbar_background_image_url}');"
+            "background-size:cover;background-position:center;"
+            if topbar_background_image_url
+            else f"background:{topbar_color};"
+        )
 
         topbar_script = f"""
         function initTopbarWidget() {{
@@ -165,7 +182,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     {top_position_css}
                     left:0;
                     right:0;
-                    background:{topbar_color};
+                    {background_style}
                     color:{topbar_text_color};
                     padding:10px 14px;
                     display:flex;
@@ -198,12 +215,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 iconSpan.textContent = "{topbar_icon}";
                 iconSpan.style.fontSize = "16px";
 
-                var textSpan = document.createElement('span');
-                textSpan.textContent = "{safe_topbar_text}";
-                textSpan.style.flex = "1";
+                var overlayText = document.createElement('span');
+                overlayText.textContent = "{safe_topbar_text}";
+                overlayText.style.flex = "1";
 
                 left.appendChild(iconSpan);
-                left.appendChild(textSpan);
+                left.appendChild(overlayText);
 
                 var btn = document.createElement('button');
                 btn.textContent = "{safe_topbar_button_text}";
@@ -249,7 +266,125 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
-    # --- BOTTOM BAR SCRIPT ---
+    # --- POPUP SCRIPT (NOVO) ---
+    popup_script = ""
+    if popup_enabled and popup_image_url:
+        popup_script = f"""
+        function initInstallPopup() {{
+            try {{
+                if (window.innerWidth >= 900) return;
+                if (!window.deferredPrompt) return;
+                if (document.getElementById('pwa-install-popup')) return;
+
+                var overlay = document.createElement('div');
+                overlay.id = 'pwa-install-popup';
+                overlay.style.cssText = `
+                    position:fixed;
+                    inset:0;
+                    background:rgba(0,0,0,0.6);
+                    z-index:2147483647;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                `;
+
+                var box = document.createElement('div');
+                box.style.cssText = `
+                    position:relative;
+                    width:90%;
+                    max-width:400px;
+                    border-radius:16px;
+                    overflow:hidden;
+                    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+                    background:#000;
+                `;
+
+                var img = document.createElement('div');
+                img.style.cssText = `
+                    width:100%;
+                    padding-top:177%;
+                    background-image:url('{popup_image_url}');
+                    background-size:cover;
+                    background-position:center;
+                `;
+
+                var btnArea = document.createElement('div');
+                btnArea.style.cssText = `
+                    position:absolute;
+                    bottom:12px;
+                    left:0;
+                    right:0;
+                    display:flex;
+                    justify-content:center;
+                    gap:8px;
+                `;
+
+                var installBtn = document.createElement('button');
+                installBtn.textContent = "Instalar app";
+                installBtn.style.cssText = `
+                    background:#10B981;
+                    color:#fff;
+                    border:none;
+                    border-radius:999px;
+                    padding:10px 18px;
+                    font-size:14px;
+                    font-weight:600;
+                    box-shadow:0 4px 10px rgba(0,0,0,0.4);
+                    cursor:pointer;
+                `;
+                installBtn.onclick = function() {{
+                    if (!window.deferredPrompt) {{
+                        overlay.remove();
+                        return;
+                    }}
+                    window.deferredPrompt.prompt();
+                    window.deferredPrompt.userChoice.then(function(choiceResult) {{
+                        if (choiceResult.outcome === 'accepted') {{
+                            try {{
+                                fetch('{final_backend_url}/analytics/install', {{
+                                    method: 'POST',
+                                    headers: {{ 'Content-Type': 'application/json' }},
+                                    body: JSON.stringify({{
+                                        store_id: '{store_id}',
+                                        visitor_id: visitorId
+                                    }})
+                                }});
+                            }} catch (e) {{}}
+                        }}
+                        window.deferredPrompt = null;
+                        overlay.remove();
+                    }});
+                }};
+
+                var closeBtn = document.createElement('button');
+                closeBtn.textContent = "Fechar";
+                closeBtn.style.cssText = `
+                    background:rgba(0,0,0,0.6);
+                    color:#fff;
+                    border:none;
+                    border-radius:999px;
+                    padding:8px 14px;
+                    font-size:12px;
+                    cursor:pointer;
+                `;
+                closeBtn.onclick = function() {{
+                    overlay.remove();
+                }};
+
+                btnArea.appendChild(installBtn);
+                btnArea.appendChild(closeBtn);
+
+                box.appendChild(img);
+                box.appendChild(btnArea);
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+            }} catch (e) {{
+                console.log("Popup install error:", e);
+            }}
+        }}
+        """
+
+    # --- BOTTOM BAR SCRIPT --- (inalterado)
     bottom_bar_script = f"""
     function isPwaMode() {{
         try {{
@@ -683,16 +818,20 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             try {{
                 {fab_script}
                 {topbar_script}
+                {popup_script}
                 if (typeof initFab === 'function') {{
                     initFab();
                 }}
                 if (typeof initTopbarWidget === 'function') {{
                     initTopbarWidget();
                 }}
+                if (typeof initInstallPopup === 'function') {{
+                    initInstallPopup();
+                }}
                 initVariantTracking();
                 initSalesTracking();
             }} catch (e) {{
-                console.log('Deferred block error (FAB/Topbar/Analytics):', e);
+                console.log('Deferred block error (FAB/Topbar/Popup/Analytics):', e);
             }}
         }}, 800);
 
