@@ -26,6 +26,9 @@ class ConfigPayload(BaseModel):
     fab_color: Optional[str] = "#2563EB"
     fab_size: Optional[str] = "medium"  # xs, small, medium, large, xl
 
+    # NOVO: imagem de fundo do FAB (banner)
+    fab_background_image_url: Optional[str] = None
+
     # Barra / banner (top/bottom)
     topbar_enabled: Optional[bool] = False
     topbar_text: Optional[str] = "Baixe nosso app"
@@ -40,6 +43,9 @@ class ConfigPayload(BaseModel):
     # NOVOS CAMPOS – cores independentes do botão da barra
     topbar_button_bg_color: Optional[str] = "#FBBF24"
     topbar_button_text_color: Optional[str] = "#111827"
+
+    # NOVO: imagem de fundo da barra fixa
+    topbar_background_image_url: Optional[str] = None
 
     # Bottom bar
     bottom_bar_bg: Optional[str] = "#FFFFFF"
@@ -83,6 +89,8 @@ def get_config(
             "fab_delay": 0,
             "fab_color": "#2563EB",
             "fab_size": "medium",  # default
+            "fab_background_image_url": "",  # novo
+
             "topbar_enabled": False,
             "topbar_text": "Baixe nosso app",
             "topbar_button_text": "Baixar",
@@ -93,6 +101,8 @@ def get_config(
             "topbar_size": "medium",  # agora string
             "topbar_button_bg_color": "#FBBF24",
             "topbar_button_text_color": "#111827",
+            "topbar_background_image_url": "",  # novo
+
             "bottom_bar_bg": "#FFFFFF",
             "bottom_bar_icon_color": "#6B7280",
         }
@@ -109,6 +119,7 @@ def get_config(
         "fab_delay": config.fab_delay or 0,
         "fab_color": getattr(config, "fab_color", "#2563EB") or "#2563EB",
         "fab_size": getattr(config, "fab_size", "medium") or "medium",
+        "fab_background_image_url": getattr(config, "fab_background_image_url", "") or "",
 
         "topbar_enabled": getattr(config, "topbar_enabled", False),
         "topbar_text": getattr(config, "topbar_text", "Baixe nosso app") or "Baixe nosso app",
@@ -117,11 +128,10 @@ def get_config(
         "topbar_position": getattr(config, "topbar_position", "bottom") or "bottom",
         "topbar_color": getattr(config, "topbar_color", "#111827") or "#111827",
         "topbar_text_color": getattr(config, "topbar_text_color", "#FFFFFF") or "#FFFFFF",
-        # devolve string direta
         "topbar_size": getattr(config, "topbar_size", "medium") or "medium",
-
         "topbar_button_bg_color": getattr(config, "topbar_button_bg_color", "#FBBF24") or "#FBBF24",
         "topbar_button_text_color": getattr(config, "topbar_button_text_color", "#111827") or "#111827",
+        "topbar_background_image_url": getattr(config, "topbar_background_image_url", "") or "",
 
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
         "bottom_bar_icon_color": getattr(
@@ -177,6 +187,7 @@ def save_config(
     config.fab_delay = payload.fab_delay
     config.fab_color = payload.fab_color
     config.fab_size = _normalize_fab_size(payload.fab_size)
+    config.fab_background_image_url = payload.fab_background_image_url
 
     # Topbar / banner
     config.topbar_enabled = payload.topbar_enabled
@@ -191,6 +202,7 @@ def save_config(
     # NOVOS CAMPOS – salvar cores do botão da barra
     config.topbar_button_bg_color = payload.topbar_button_bg_color
     config.topbar_button_text_color = payload.topbar_button_text_color
+    config.topbar_background_image_url = payload.topbar_background_image_url
 
     # Bottom bar
     config.bottom_bar_bg = payload.bottom_bar_bg
