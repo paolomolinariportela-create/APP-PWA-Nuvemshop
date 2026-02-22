@@ -24,8 +24,8 @@ class ConfigPayload(BaseModel):
     fab_icon: Optional[str] = "📲"
     fab_delay: Optional[int] = 0
     fab_color: Optional[str] = "#2563EB"
-    fab_size: Optional[float] = 1.0  # slider 0.7–1.5 no front
-
+    fab_size: Optional[str] = "medium"  # xs, small, medium, large, xl
+    
     # Barra / banner (top/bottom)
     topbar_enabled: Optional[bool] = False
     topbar_text: Optional[str] = "Baixe nosso app"
