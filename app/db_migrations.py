@@ -57,6 +57,10 @@ def ensure_app_config_table_and_columns():
         "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
         "topbar_size": "VARCHAR DEFAULT 'medium'",
 
+        # NOVOS CAMPOS – cores independentes do botão da barra
+        "topbar_button_bg_color": "VARCHAR DEFAULT '#FBBF24'",
+        "topbar_button_text_color": "VARCHAR DEFAULT '#111827'",
+
         # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
