@@ -604,36 +604,63 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             return outputArray;
         }}
 
-        async function subscribePush() {{
-            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
+         async function subscribePush() {
+            console.log("PUSH: subscribePush() chamado");
+            if (!('serviceWorker' in navigator) || !publicVapidKey) {
                 console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
                 return;
-            }}
-            try {{
-                const registration = await navigator.serviceWorker.register('/apps/app-builder/service-worker.js', {{ scope: '/' }});
-                await navigator.serviceWorker.ready;
+            }
+            try {
+                console.log("PUSH: Notification.permission =", Notification.permission);
+                if (Notification.permission === 'default') {
+                    console.log("PUSH: pedindo permissão de notificação...");
+                    const perm = await Notification.requestPermission();
+                    console.log("PUSH: resultado Notification.permission =", perm);
+                    if (perm !== 'granted') {
+                        console.log("PUSH: permissão não concedida, abortando");
+                        return;
+                    }
+                } else if (Notification.permission === 'denied') {
+                    console.log("PUSH: permissão já negada, abortando");
+                    return;
+                }
 
-                const subscription = await registration.pushManager.subscribe({{
+                console.log("PUSH: registrando Service Worker via proxy...");
+                const registration = await navigator.serviceWorker.register(
+                    '/apps/app-builder/service-worker.js',
+                    {{ scope: '/' }}
+                );
+                const readyReg = await navigator.serviceWorker.ready;
+                console.log("PUSH: Service Worker pronto. scope =", readyReg.scope);
+
+                console.log("PUSH: chamando pushManager.subscribe...");
+                const subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                }});
+                });
+                console.log("PUSH: subscription criada", subscription);
 
-                const res = await fetch('{final_backend_url}/push/subscribe', {{
+                console.log("PUSH: enviando inscrição para backend...");
+                const res = await fetch('{final_backend_url}/push/subscribe', {
                     method: 'POST',
-                    body: JSON.stringify({{
+                    body: JSON.stringify({
                         subscription: subscription,
                         store_id: '{store_id}',
                         visitor_id: visitorId
-                    }}),
-                    headers: {{ 'Content-Type': 'application/json' }}
-                }});
-                try {{
-                    await res.json();
-                }} catch (e) {{}}
-            }} catch (err) {{
+                    }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                console.log("PUSH: resposta backend status =", res.status);
+                try {
+                    const json = await res.json();
+                    console.log("PUSH: resposta backend json =", json);
+                } catch (e) {
+                    console.log("PUSH: não conseguiu parsear JSON da resposta");
+                }
+            } catch (err) {
                 console.error("❌ Erro Push:", err);
-            }}
-        }}
+            }
+        }
 
         function showNotificationTopBar() {{
             if (!('Notification' in window)) return;
