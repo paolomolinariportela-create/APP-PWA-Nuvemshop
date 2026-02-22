@@ -34,7 +34,8 @@ class ConfigPayload(BaseModel):
     topbar_position: Optional[str] = "bottom"
     topbar_color: Optional[str] = "#111827"
     topbar_text_color: Optional[str] = "#FFFFFF"
-    topbar_size: Optional[float] = 1.0  # slider 0.8–1.4 no front
+    # AGORA: tamanho como string igual ao FAB
+    topbar_size: Optional[str] = "medium"  # xs, small, medium, large, xl
 
     # NOVOS CAMPOS – cores independentes do botão da barra
     topbar_button_bg_color: Optional[str] = "#FBBF24"
@@ -53,19 +54,13 @@ def _normalize_fab_size(size: str | None) -> str:
     return s if s in allowed else "medium"
 
 
-def _map_slider_to_size(value: float | None) -> str:
-    if value is None:
+def _normalize_topbar_size(size: str | None) -> str:
+    # Mesma lógica do FAB
+    allowed = {"xs", "small", "medium", "large", "xl"}
+    if not size:
         return "medium"
-    try:
-        v = float(value)
-    except (TypeError, ValueError):
-        return "medium"
-
-    if v <= 0.85:
-        return "small"
-    if v >= 1.25:
-        return "large"
-    return "medium"
+    s = str(size).lower()
+    return s if s in allowed else "medium"
 
 
 @router.get("/config")
@@ -95,19 +90,12 @@ def get_config(
             "topbar_position": "bottom",
             "topbar_color": "#111827",
             "topbar_text_color": "#FFFFFF",
-            "topbar_size": 1.0,  # medium
+            "topbar_size": "medium",  # agora string
             "topbar_button_bg_color": "#FBBF24",
             "topbar_button_text_color": "#111827",
             "bottom_bar_bg": "#FFFFFF",
             "bottom_bar_icon_color": "#6B7280",
         }
-
-    def _size_to_slider(size: str | None) -> float:
-        if size == "small":
-            return 0.8
-        if size == "large":
-            return 1.3
-        return 1.0  # medium / default
 
     return {
         "app_name": config.app_name or "Minha Loja",
@@ -129,9 +117,9 @@ def get_config(
         "topbar_position": getattr(config, "topbar_position", "bottom") or "bottom",
         "topbar_color": getattr(config, "topbar_color", "#111827") or "#111827",
         "topbar_text_color": getattr(config, "topbar_text_color", "#FFFFFF") or "#FFFFFF",
-        "topbar_size": _size_to_slider(getattr(config, "topbar_size", "medium")),
+        # devolve string direta
+        "topbar_size": getattr(config, "topbar_size", "medium") or "medium",
 
-        # NOVOS CAMPOS – devolve cores do botão da barra
         "topbar_button_bg_color": getattr(config, "topbar_button_bg_color", "#FBBF24") or "#FBBF24",
         "topbar_button_text_color": getattr(config, "topbar_button_text_color", "#111827") or "#111827",
 
@@ -198,7 +186,7 @@ def save_config(
     config.topbar_position = payload.topbar_position
     config.topbar_color = payload.topbar_color
     config.topbar_text_color = payload.topbar_text_color
-    config.topbar_size = _map_slider_to_size(payload.topbar_size)
+    config.topbar_size = _normalize_topbar_size(payload.topbar_size)
 
     # NOVOS CAMPOS – salvar cores do botão da barra
     config.topbar_button_bg_color = payload.topbar_button_bg_color
