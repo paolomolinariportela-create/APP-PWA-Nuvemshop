@@ -159,10 +159,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\\\\\\\\\')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\\\\\\\\\')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
 
-        # se quiser usar imagem de fundo, dá pra incluir aqui
         background_style = (
             f"background-image:url('{topbar_background_image_url}');"
             "background-size:cover;background-position:center;"
@@ -194,7 +193,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     box-shadow:0 2px 8px rgba(0,0,0,0.3);
                 `;
 
-                // Ajuste de espaço no body para não cobrir conteúdo
                 try {{
                     var barHeight = 44;
                     if ("{topbar_position}" === "top") {{
@@ -266,7 +264,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
-    # --- POPUP SCRIPT (NOVO) ---
+    # --- POPUP SCRIPT ---
     popup_script = ""
     if popup_enabled and popup_image_url:
         popup_script = f"""
@@ -384,7 +382,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
-    # --- BOTTOM BAR SCRIPT --- (inalterado)
+    # --- BOTTOM BAR SCRIPT ---
     bottom_bar_script = f"""
     function isPwaMode() {{
         try {{
@@ -594,7 +592,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
             const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
             const rawData = window.atob(base64);
             const outputArray = new Uint8Array(rawData.length);
@@ -604,26 +602,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             return outputArray;
         }}
 
-         async function subscribePush() {
+        async function subscribePush() {{
             console.log("PUSH: subscribePush() chamado");
-            if (!('serviceWorker' in navigator) || !publicVapidKey) {
+            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
                 console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
                 return;
-            }
-            try {
+            }}
+            try {{
                 console.log("PUSH: Notification.permission =", Notification.permission);
-                if (Notification.permission === 'default') {
+                if (Notification.permission === 'default') {{
                     console.log("PUSH: pedindo permissão de notificação...");
                     const perm = await Notification.requestPermission();
                     console.log("PUSH: resultado Notification.permission =", perm);
-                    if (perm !== 'granted') {
+                    if (perm !== 'granted') {{
                         console.log("PUSH: permissão não concedida, abortando");
                         return;
-                    }
-                } else if (Notification.permission === 'denied') {
+                    }}
+                }} else if (Notification.permission === 'denied') {{
                     console.log("PUSH: permissão já negada, abortando");
                     return;
-                }
+                }}
 
                 console.log("PUSH: registrando Service Worker via proxy...");
                 const registration = await navigator.serviceWorker.register(
@@ -634,33 +632,33 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 console.log("PUSH: Service Worker pronto. scope =", readyReg.scope);
 
                 console.log("PUSH: chamando pushManager.subscribe...");
-                const subscription = await registration.pushManager.subscribe({
+                const subscription = await registration.pushManager.subscribe({{
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                });
+                }});
                 console.log("PUSH: subscription criada", subscription);
 
                 console.log("PUSH: enviando inscrição para backend...");
-                const res = await fetch('{final_backend_url}/push/subscribe', {
+                const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
-                    body: JSON.stringify({
+                    body: JSON.stringify({{
                         subscription: subscription,
                         store_id: '{store_id}',
                         visitor_id: visitorId
-                    }),
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                    }}),
+                    headers: {{ 'Content-Type': 'application/json' }}
+                }});
                 console.log("PUSH: resposta backend status =", res.status);
-                try {
+                try {{
                     const json = await res.json();
                     console.log("PUSH: resposta backend json =", json);
-                } catch (e) {
+                }} catch (e) {{
                     console.log("PUSH: não conseguiu parsear JSON da resposta");
-                }
-            } catch (err) {
+                }}
+            }} catch (err) {{
                 console.error("❌ Erro Push:", err);
-            }
-        }
+            }}
+        }}
 
         function showNotificationTopBar() {{
             if (!('Notification' in window)) return;
@@ -726,11 +724,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
             var steps = "";
             if (isSamsung) {{
-                steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha Adicionar página a, depois Tela inicial.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
             }} else if (isSafari) {{
-                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione Adicionar à Tela de Início.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
             }} else {{
-                steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\\\n3. Confirme para instalar o app no seu celular.";
+                steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
             }}
 
             var modal = document.createElement('div');
