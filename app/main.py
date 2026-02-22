@@ -66,6 +66,10 @@ def ensure_app_config_table_and_columns():
         "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
         "topbar_size": "VARCHAR DEFAULT 'medium'",
 
+        # NOVOS CAMPOS – cores independentes do botão da barra
+        "topbar_button_bg_color": "VARCHAR DEFAULT '#FBBF24'",
+        "topbar_button_text_color": "VARCHAR DEFAULT '#111827'",
+
         # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
@@ -183,7 +187,6 @@ app = FastAPI(
 )
 
 # --- CONFIGURAÇÃO DE CORS ---
-# Permite que o painel admin e as lojas acessem a API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Em produção, ideal restringir aos domínios dos clientes
@@ -198,17 +201,10 @@ app.add_middleware(
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 
-# 2. Funcionalidades do App (Antigo stats_routes dividido)
-# O Loader não tem prefixo pois o script é acessado como /loader.js
+# 2. Funcionalidades do App
 app.include_router(loader_routes.router, tags=["Loader"])
-
-# Rotas de Push (/push/subscribe, /push/send, /push/history)
 app.include_router(push_routes.router)
-
-# Rotas de Analytics (/analytics/dashboard, /analytics/visita, /analytics/venda)
 app.include_router(analytics_routes.router)
-
-# 3. Arquivos do PWA (Manifest, Service Worker)
 app.include_router(pwa_routes.router, tags=["PWA"])
 
 
@@ -219,7 +215,6 @@ def health_check():
 
 
 # --- SERVINDO O FRONTEND (Sempre por último) ---
-# Tenta servir os arquivos estáticos do React se existirem
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
