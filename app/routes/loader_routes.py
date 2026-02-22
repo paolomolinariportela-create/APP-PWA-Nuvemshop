@@ -75,6 +75,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_position = getattr(config, "topbar_position", None) or "bottom"
     topbar_color = getattr(config, "topbar_color", None) or "#111827"
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
+    # NOVOS CAMPOS: cores independentes do botão da barra
+    topbar_button_bg_color = getattr(config, "topbar_button_bg_color", None) or "#FBBF24"
+    topbar_button_text_color = getattr(config, "topbar_button_text_color", None) or "#111827"
 
     # --- FAB SCRIPT ---
     fab_script = ""
@@ -147,8 +150,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\"')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\"')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\')
 
         topbar_script = f"""
         function initTopbarWidget() {{
@@ -176,7 +179,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                 // Ajuste de espaço no body para não cobrir conteúdo
                 try {{
-                    var barHeight = 44; // altura aproximada da barra
+                    var barHeight = 44;
                     if ("{topbar_position}" === "top") {{
                         var currentTop = window.getComputedStyle(document.body).paddingTop || "0px";
                         var baseTop = parseInt(currentTop, 10) || 0;
@@ -205,7 +208,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 var btn = document.createElement('button');
                 btn.textContent = "{safe_topbar_button_text}";
                 btn.style.cssText = `
-                    background:#FBBF24;
+                    background:{topbar_button_bg_color};
+                    color:{topbar_button_text_color};
                     border:none;
                     border-radius:999px;
                     padding:6px 12px;
