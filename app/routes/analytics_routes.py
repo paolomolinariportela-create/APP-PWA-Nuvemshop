@@ -188,7 +188,7 @@ def get_dashboard_stats(
     )
     vendas_site = max(0, qtd_vendas - vendas_pwa)
 
-    # CHECKOUT / CARRINHO (todos)
+    # CHECKOUT / CARRINHO (TODOS)
     qtd_checkout = (
         db.query(func.count(distinct(VisitaApp.visitor_id)))
         .filter(
@@ -322,10 +322,29 @@ def get_dashboard_stats(
     else:
         tempo_medio_str = "--"
 
+    # FUNIL APENAS DO APP (PWA)
+    visitas_pwa_funil = visitas_pwa  # visitantes únicos PWA
+
+    qtd_checkout_pwa = (
+        db.query(func.count(distinct(VisitaApp.visitor_id)))
+        .filter(
+            VisitaApp.store_id == store_id,
+            VisitaApp.is_pwa == True,
+            (
+                VisitaApp.pagina.contains("checkout")
+                | VisitaApp.pagina.contains("carrinho")
+            ),
+        )
+        .scalar()
+        or 0
+    )
+
+    # já temos vendas_pwa calculado acima
+
     return {
         "receita": total_receita,
         "vendas": qtd_vendas,
-        # agora só instalações PWA
+        # só instalações PWA
         "instalacoes": instalacoes_pwa,
         "crescimento_instalacoes_7d": crescimento_instalacoes_7d,
         "carrinhos_abandonados": {
@@ -341,9 +360,10 @@ def get_dashboard_stats(
             "top_paginas_pwa": top_paginas_pwa,
         },
         "funil": {
-            "visitas": visitantes_unicos,
-            "carrinho": qtd_checkout,
-            "checkout": qtd_vendas,
+            # funil apenas do app
+            "visitas": visitas_pwa_funil,
+            "carrinho": qtd_checkout_pwa,
+            "checkout": vendas_pwa,
         },
         "recorrencia": {
             "clientes_2x": recorrentes,
@@ -354,6 +374,8 @@ def get_dashboard_stats(
         },
         "ticket_medio": {"app": round(ticket_medio, 2), "site": 0.0},
         "taxa_conversao": {
+            # aqui ainda usa base total; se quiser, depois
+            # podemos mudar para base PWA também
             "app": round(
                 (qtd_vendas / max(1, visitantes_unicos) * 100),
                 1,
