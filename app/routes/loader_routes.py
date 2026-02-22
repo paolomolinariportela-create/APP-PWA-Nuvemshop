@@ -709,9 +709,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         function initNotificationBar() {{
-            if (isApp) {{
-                showNotificationTopBar();
-            }}
+            // TEMPORÁRIO: ignorar isApp para debug
+            showNotificationTopBar();
         }}
 
         function showInstallHelpModal() {{
