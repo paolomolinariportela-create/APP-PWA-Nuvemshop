@@ -18,7 +18,7 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     """
     Gera o script loader.js personalizado para cada loja.
-    Uso no frontend da loja: <script src="https://seu-api.com/loader.js?store_id=123"></script>
+    Uso: <script src="https://sua-api.com/loader.js?store_id=123"></script>
     """
 
     final_backend_url = BACKEND_URL or str(request.base_url).rstrip("/")
@@ -32,11 +32,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # Cores básicas
     color = config.theme_color if config else "#000000"
 
-    # --- NOVAS CORES / CONFIGS DA BOTTOM BAR (com defaults) ---
+    # --- BOTTOM BAR (PWA app) ---
     bottom_bar_bg = getattr(config, "bottom_bar_bg", "#FFFFFF") if config else "#FFFFFF"
     bottom_bar_icon_color = getattr(config, "bottom_bar_icon_color", "#6B7280") if config else "#6B7280"
 
-    # --- CONFIGS DO FAB (tudo vindo do banco, com defaults) ---
+    # --- FAB ---
     fab_enabled = bool(getattr(config, "fab_enabled", False)) if config else False
     fab_text = getattr(config, "fab_text", None) or "Baixar App"
     fab_position = getattr(config, "fab_position", "right") or "right"
@@ -45,11 +45,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_icon = raw_icon if (raw_icon and str(raw_icon).strip()) else "📲"
 
     fab_delay = getattr(config, "fab_delay", 0) or 0
-
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # 5 tamanhos fixos para o FAB
     if fab_size == "xs":
         fab_width = 54
         fab_height = 46
@@ -66,11 +64,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         fab_width = 90
         fab_height = 54
 
-    # Distância das bordas (padrão: canto inferior, acima da bottom bar)
     offset_px = 56
     position_css = f"right:{offset_px}px;" if fab_position == "right" else f"left:{offset_px}px;"
 
-    # --- CONFIGS DA TOP/BOTTOM BAR (banner do widget, não a bottom bar do PWA) ---
+    # --- TOPBAR (banner fixo de download) ---
     topbar_enabled = bool(getattr(config, "topbar_enabled", False)) if config else False
     topbar_text = getattr(config, "topbar_text", None) or "Baixe nosso app"
     topbar_button_text = getattr(config, "topbar_button_text", None) or "Baixar"
@@ -79,7 +76,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_color = getattr(config, "topbar_color", None) or "#111827"
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
 
-    # Script do Botão Flutuante (FAB)
+    # FAB script
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -90,7 +87,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     var fab = document.createElement('div');
                     fab.id = 'pwa-fab-btn';
                     fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
-                    
+
                     var iconSpan = document.createElement('span');
                     iconSpan.style.fontSize = "20px";
                     iconSpan.textContent = "{fab_icon}";
@@ -183,7 +180,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         """
 
-    # Script da Barra Fixa (banner de download)
+    # Topbar script (sem f-string, usando format)
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
@@ -201,13 +198,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         right:0;
                         background:{topbar_color};
                         color:{topbar_text_color};
-                        padding:10px 14px;
+                        padding:12px 16px;
                         display:flex;
                         align-items:center;
                         justify-content:space-between;
                         font-family:sans-serif;
                         font-size:13px;
-                        z-index:2147483646;
+                        z-index:2147483647;
                         box-shadow:0 2px 8px rgba(0,0,0,0.3);
                     `;
 
@@ -256,7 +253,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             topbar_button_text=topbar_button_text.replace('"', '\\"'),
         )
 
-    # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
+    # Bottom bar (PWA)
     bottom_bar_script = f"""
         function isPwaMode() {{
             try {{
@@ -367,12 +364,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
     """
 
-    # JS FINAL
+    # JS final
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v5 - Push Force");
 
-        // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
             visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -381,7 +377,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
-        // --- B. METADADOS ---
         function initMeta() {{
             var link = document.createElement('link');
             link.rel = 'manifest';
@@ -394,7 +389,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             document.head.appendChild(meta);
         }}
 
-        // --- C. ANALYTICS ---
         function buildVisitPayload() {{
             var payload = {{
                 store_id: '{store_id}',
@@ -447,7 +441,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         function initAnalytics() {{
             trackVisit();
-
             try {{
                 var oldHref = document.location.href;
                 new MutationObserver(function() {{
@@ -459,7 +452,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch (e) {{}}
         }}
 
-        // --- D. INSTALAÇÃO ---
         function initInstallCapture() {{
             window.deferredPrompt = null;
             window.addEventListener('beforeinstallprompt', function(e) {{
@@ -468,7 +460,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // --- E. PUSH ---
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
         function urlBase64ToUint8Array(base64String) {{
@@ -488,17 +479,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
             try {{
-                console.log("PUSH: registrando Service Worker em: /service-worker.js");
                 const registration = await navigator.serviceWorker.register('/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
-                console.log("PUSH: chamando pushManager.subscribe...");
                 const subscription = await registration.pushManager.subscribe({{
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 }});
 
-                console.log("📡 Enviando inscrição Push para backend em:", '{final_backend_url}/push/subscribe');
                 const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
                     body: JSON.stringify({{
@@ -508,53 +496,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}),
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
-
-                console.log("PUSH /subscribe status:", res.status);
-                let json = null;
                 try {{
-                    json = await res.json();
-                }} catch (e) {{
-                    console.log("PUSH /subscribe: não conseguiu parsear JSON", e);
-                }}
-                console.log("✅ Push Resultado:", json);
-
+                    await res.json();
+                }} catch (e) {{}}
             }} catch (err) {{
                 console.error("❌ Erro Push:", err);
-            }}
-        }}
-
-        function checkNotificationPermission() {{
-            if (!('Notification' in window)) {{
-                return 'unsupported';
-            }}
-            return Notification.permission;
-        }}
-
-        async function askNotificationAndSubscribe() {{
-            if (!('Notification' in window)) return;
-
-            const current = Notification.permission;
-
-            console.log("PUSH: permissão atual =", current);
-
-            if (current === 'granted') {{
-                console.log("PUSH: permissão já concedida, inscrevendo...");
-                subscribePush();
-                return;
-            }}
-
-            if (current === 'denied') {{
-                alert('As notificações estão bloqueadas neste dispositivo. Ative nas configurações do navegador para receber atualizações.');
-                return;
-            }}
-
-            console.log("PUSH: permissão default, pedindo agora...");
-            const result = await Notification.requestPermission();
-            console.log("PUSH: resultado do requestPermission =", result);
-            if (result === 'granted') {{
-                subscribePush();
-            }} else {{
-                console.log('PUSH: usuário não concedeu a permissão:', result);
             }}
         }}
 
@@ -585,7 +531,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             `;
 
             bar.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px;">
+                <div style="display:flex; align_items:center; gap:8px;">
                   <span style="font-size:16px;">🔔</span>
                   <span>Ative as notificações para receber atualizações de pedidos, cupons e novidades.</span>
                 </div>
@@ -598,10 +544,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             document.body.appendChild(bar);
 
             document.getElementById('pwa-notif-allow').onclick = function () {{
-                askNotificationAndSubscribe();
+                subscribePush();
                 bar.remove();
             }};
-
             document.getElementById('pwa-notif-close').onclick = function () {{
                 bar.remove();
             }};
@@ -613,7 +558,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // --- VARIANTES ---
         function initVariantTracking() {{
             try {{
                 if (window.LS && typeof LS.registerOnChangeVariant === 'function') {{
@@ -621,7 +565,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         try {{
                             var productId = null;
                             var productName = null;
-
                             try {{
                                 if (LS.product) {{
                                     productId = LS.product.id || null;
@@ -656,12 +599,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch (e) {{}}
         }}
 
-        // --- VENDAS ---
         function initSalesTracking() {{
             try {{
                 if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
                     var val = '0.00';
-
                     if (window.dataLayer) {{
                         for (var i = 0; i < window.dataLayer.length; i++) {{
                             if (window.dataLayer[i].transactionTotal) {{
@@ -694,7 +635,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}
 
-        // --- INICIALIZAÇÃO ---
         try {{
             initMeta();
             initInstallCapture();
@@ -706,7 +646,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('Critical block error:', e);
         }}
 
-        // Bloco diferido: FAB, Topbar e tracking
         setTimeout(function () {{
             try {{
                 {fab_script}
@@ -724,7 +663,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}, 800);
 
-        // Bottom bar: inicializa assim que o DOM estiver pronto
         if (document.readyState === 'loading') {{
             document.addEventListener('DOMContentLoaded', function() {{
                 try {{
