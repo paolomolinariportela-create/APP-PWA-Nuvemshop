@@ -113,11 +113,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                         var steps = "";
                         if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha Adicionar página a, depois Tela inicial.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione Adicionar à Tela de Início.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else {{
-                            steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\\\n3. Confirme para instalar o app no seu celular.";
+                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
                         }}
 
                         var modal = document.createElement('div');
@@ -170,7 +170,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     );
                     document.body.appendChild(fab);
 
-                    setInterval(() => {{
+                    setInterval(function() {{
                         fab.animate(
                             [
                                 {{ transform: 'scale(1)' }},
@@ -187,7 +187,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     # Script da Barra Fixa (banner de download)
     topbar_script = ""
     if topbar_enabled:
-        topbar_script = f"""
+        top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
+        # string normal + format para evitar erro de f-string com chaves JS
+        topbar_script = """
             function initTopbarWidget() {{
                 try {{
                     if (document.getElementById('pwa-topbar-widget')) return;
@@ -196,7 +198,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     bar.id = 'pwa-topbar-widget';
                     bar.style.cssText = `
                         position:fixed;
-                        {"top:0;" if topbar_position == "top" else "bottom:0;"}
+                        {top_position_css}
                         left:0;
                         right:0;
                         background:{topbar_color};
@@ -247,7 +249,199 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     console.log("Topbar widget error:", e);
                 }}
             }}
-        """
+        """.format(
+            top_position_css=top_position_css,
+            topbar_color=topbar_color,
+            topbar_text_color=topbar_text_color,
+            topbar_icon=topbar_icon,
+            topbar_text=topbar_text.replace('"', '\\"'),
+            topbar_button_text=topbar_button_text.replace('"', '\\"'),
+        )
+
+    # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
+    bottom_bar_script = f"""
+        function isPwaMode() {{
+            try {{
+                if (window.matchMedia) {{
+                    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+                    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+                    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+                }}
+                if (window.navigator.standalone === true) return true; // iOS 
+            }} catch (e) {{}}
+            return false;
+        }}
+
+        function initBottomBar() {{
+            try {{
+                if (!isPwaMode()) return;
+                if (window.innerWidth > 900) return;
+                if (document.getElementById('pwa-bottom-nav')) return;
+
+                var bar = document.createElement('nav');
+                bar.id = 'pwa-bottom-nav';
+                bar.style.cssText = `
+                    position:fixed;
+                    bottom:0;
+                    left:0;
+                    right:0;
+                    height:72px;
+                    background:{bottom_bar_bg};
+                    border-top:1px solid #e5e7eb;
+                    display:flex;
+                    justify-content:space-around;
+                    align-items:center;
+                    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+                    z-index:2147483647;
+                    padding-bottom: env(safe-area-inset-bottom, 0);
+                `;
+
+                try {{
+                    var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
+                    var base = parseInt(currentPadding, 10) || 0;
+                    var extra = 72;
+                    document.body.style.paddingBottom = (base + extra) + "px";
+                }} catch (e) {{}}
+
+                function createItem(svgPath, label, href) {{
+                    var btn = document.createElement('button');
+                    btn.style.cssText = `
+                        background:none;
+                        border:none;
+                        display:flex;
+                        flex-direction:column;
+                        align-items:center;
+                        justify-content:center;
+                        gap:4px;
+                        font-size:10px;
+                        color:{bottom_bar_icon_color};
+                        cursor:pointer;
+                    `;
+                    btn.onclick = function() {{
+                        try {{
+                            if (href) window.location.href = href;
+                        }} catch (e) {{}}
+                    }};
+
+                    var iconWrapper = document.createElement('div');
+                    iconWrapper.style.cssText = `
+                        width:28px;
+                        height:28px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                    `;
+
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('viewBox', '0 0 24 24');
+                    svg.setAttribute('width', '28');
+                    svg.setAttribute('height', '28');
+                    svg.style.fill = 'currentColor';
+
+                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', svgPath);
+                    svg.appendChild(path);
+                    iconWrapper.appendChild(svg);
+
+                    var text = document.createElement('span');
+                    text.textContent = label;
+                    text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
+
+                    btn.appendChild(iconWrapper);
+                    btn.appendChild(text);
+                    return btn;
+                }}
+
+                var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
+                var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
+                var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
+                var userPath = "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
+
+                bar.appendChild(createItem(homePath, "Início", "/"));
+                bar.appendChild(createItem(shopPath, "Loja", "/produtos"));
+                bar.appendChild(createItem(bellPath, "Alertas", "/notificacoes"));
+                bar.appendChild(createItem(userPath, "Conta", "/minha-conta"));
+
+                document.body.appendChild(bar);
+            }} catch (e) {{
+                console.log('Bottom bar error:', e);
+            }}
+        }}
+    """
+
+    # JS FINAL
+    js = f"""
+    (function() {{
+        console.log("🚀 PWA Loader Pro v5 - Push Force");
+
+        // --- A. IDENTIFICAÇÃO DO USUÁRIO ---
+        var visitorId = localStorage.getItem('pwa_v_id');
+        if (!visitorId) {{
+            visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+            localStorage.setItem('pwa_v_id', visitorId);
+        }}
+
+        var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        // --- B. METADADOS ---
+        function initMeta() {{
+            var link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = '{final_backend_url}/manifest/{store_id}.json';
+            document.head.appendChild(link);
+
+            var meta = document.createElement('meta');
+            meta.name = 'theme-color';
+            meta.content = '{color}';
+            document.head.appendChild(meta);
+        }}
+
+        // ... resto do js (analytics, push, etc.) ...
+
+        // Bloco diferido: FAB, Topbar e tracking
+        setTimeout(function () {{
+            try {{
+                {fab_script}
+                {topbar_script}
+                if (typeof initFab === 'function') {{
+                    initFab();
+                }}
+                if (typeof initTopbarWidget === 'function') {{
+                    initTopbarWidget();
+                }}
+                initVariantTracking();
+                initSalesTracking();
+            }} catch (e) {{
+                console.log('Deferred block error (FAB/Topbar/Analytics):', e);
+            }}
+        }}, 800);
+
+        // Bottom bar: inicializa assim que o DOM estiver pronto
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', function() {{
+                try {{
+                    {bottom_bar_script}
+                    if (typeof initBottomBar === 'function') {{
+                        initBottomBar();
+                    }}
+                }} catch (e) {{
+                    console.log('Bottom bar init error:', e);
+                }}
+            }});
+        }} else {{
+            try {{
+                {bottom_bar_script}
+                if (typeof initBottomBar === 'function') {{
+                    initBottomBar();
+                }}
+            }} catch (e) {{
+                console.log('Bottom bar init error:', e);
+            }}
+        }}
+    }})();
+    """
+
+    return Response(content=js, media_type="application/javascript")
         
     # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
     bottom_bar_script = f"""
