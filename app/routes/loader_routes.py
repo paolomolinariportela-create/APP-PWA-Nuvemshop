@@ -99,43 +99,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 fab.appendChild(iconSpan);
                 fab.appendChild(textSpan);
 
-                function showInstallHelpModal() {{
-                    var existing = document.getElementById('pwa-install-modal');
-                    if (existing) existing.remove();
-
-                    var ua = navigator.userAgent || "";
-                    var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
-                    var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
-
-                    var steps = "";
-                    if (isSamsung) {{
-                        steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
-                    }} else if (isSafari) {{
-                        steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
-                    }} else {{
-                        steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
-                    }}
-
-                    var modal = document.createElement('div');
-                    modal.id = 'pwa-install-modal';
-                    modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
-
-                    var box = document.createElement('div');
-                    box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
-
-                    box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
-                                    "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
-                                    "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
-                                    "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
-
-                    modal.appendChild(box);
-                    document.body.appendChild(modal);
-
-                    document.getElementById('pwa-install-modal-close').onclick = function() {{
-                        modal.remove();
-                    }};
-                }}
-
                 fab.onclick = function() {{
                     if (window.deferredPrompt) {{
                         window.deferredPrompt.prompt();
@@ -180,12 +143,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
-    # --- TOPBAR SCRIPT (SIMPLES) ---
+    # --- TOPBAR SCRIPT ---
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\"')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\"')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\"')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\"')
 
         topbar_script = f"""
         function initTopbarWidget() {{
@@ -237,7 +200,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     cursor:pointer;
                 `;
                 btn.onclick = function() {{
-                    window.scrollTo({{ top: 0, behavior: 'smooth' }});
+                    if (window.deferredPrompt) {{
+                        window.deferredPrompt.prompt();
+                        window.deferredPrompt.userChoice.then(function(choiceResult) {{
+                            if (choiceResult.outcome === 'accepted') {{
+                                try {{
+                                    fetch('{final_backend_url}/analytics/install', {{
+                                        method: 'POST',
+                                        headers: {{ 'Content-Type': 'application/json' }},
+                                        body: JSON.stringify({{
+                                            store_id: '{store_id}',
+                                            visitor_id: visitorId
+                                        }})
+                                    }});
+                                }} catch (e) {{}}
+                            }}
+                            window.deferredPrompt = null;
+                        }});
+                    }} else {{
+                        showInstallHelpModal();
+                    }}
                 }};
 
                 bar.appendChild(left);
@@ -552,6 +534,43 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (isApp) {{
                 showNotificationTopBar();
             }}
+        }}
+
+        function showInstallHelpModal() {{
+            var existing = document.getElementById('pwa-install-modal');
+            if (existing) existing.remove();
+
+            var ua = navigator.userAgent || "";
+            var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
+            var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
+
+            var steps = "";
+            if (isSamsung) {{
+                steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
+            }} else if (isSafari) {{
+                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
+            }} else {{
+                steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
+            }}
+
+            var modal = document.createElement('div');
+            modal.id = 'pwa-install-modal';
+            modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
+
+            var box = document.createElement('div');
+            box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
+
+            box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
+                            "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
+                            "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
+                            "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
+
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+
+            document.getElementById('pwa-install-modal-close').onclick = function() {{
+                modal.remove();
+            }};
         }}
 
         function initVariantTracking() {{
