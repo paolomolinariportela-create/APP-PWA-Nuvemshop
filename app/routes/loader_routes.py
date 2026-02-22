@@ -196,7 +196,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     bar.id = 'pwa-topbar-widget';
                     bar.style.cssText = `
                         position:fixed;
-                        { 'top:0;' if topbar_position == 'top' else 'bottom:0;' }
+                        {"top:0;" if topbar_position == "top" else "bottom:0;"}
                         left:0;
                         right:0;
                         background:{topbar_color};
@@ -237,8 +237,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         cursor:pointer;
                     `;
                     btn.onclick = function() {{
-                        // Aqui você pode abrir o mesmo fluxo do FAB,
-                        // por enquanto vamos só rolar para o topo
                         window.scrollTo({{ top: 0, behavior: 'smooth' }});
                     }};
 
