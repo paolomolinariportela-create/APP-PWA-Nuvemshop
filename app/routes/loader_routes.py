@@ -147,8 +147,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\"')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\"')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\"')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\"')
 
         topbar_script = f"""
         function initTopbarWidget() {{
@@ -173,6 +173,20 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     z-index:2147483647;
                     box-shadow:0 2px 8px rgba(0,0,0,0.3);
                 `;
+
+                // Ajuste de espaço no body para não cobrir conteúdo
+                try {{
+                    var barHeight = 44; // altura aproximada da barra
+                    if ("{topbar_position}" === "top") {{
+                        var currentTop = window.getComputedStyle(document.body).paddingTop || "0px";
+                        var baseTop = parseInt(currentTop, 10) || 0;
+                        document.body.style.paddingTop = (baseTop + barHeight) + "px";
+                    }} else {{
+                        var currentBottom = window.getComputedStyle(document.body).paddingBottom || "0px";
+                        var baseBottom = parseInt(currentBottom, 10) || 0;
+                        document.body.style.paddingBottom = (baseBottom + barHeight) + "px";
+                    }}
+                }} catch (e) {{}}
 
                 var left = document.createElement('div');
                 left.style.cssText = "display:flex;align-items:center;gap:8px;";
@@ -546,11 +560,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
             var steps = "";
             if (isSamsung) {{
-                steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
+                steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha Adicionar página a, depois Tela inicial.\\\\n3. Confirme o nome do app e toque em Adicionar.";
             }} else if (isSafari) {{
-                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
+                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione Adicionar à Tela de Início.\\\\n3. Confirme o nome do app e toque em Adicionar.";
             }} else {{
-                steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
+                steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\\\n3. Confirme para instalar o app no seu celular.";
             }}
 
             var modal = document.createElement('div');
