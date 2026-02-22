@@ -610,7 +610,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
             try {{
-                const registration = await navigator.serviceWorker.register('/apps/app-builder/service-worker.js', { scope: '/' });
+                const registration = await navigator.serviceWorker.register('/apps/app-builder/service-worker.js', {{ scope: '/' }});
                 await navigator.serviceWorker.ready;
 
                 const subscription = await registration.pushManager.subscribe({{
