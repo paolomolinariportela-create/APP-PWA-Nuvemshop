@@ -25,7 +25,7 @@ class ConfigPayload(BaseModel):
     fab_delay: Optional[int] = 0
     fab_color: Optional[str] = "#2563EB"
     fab_size: Optional[str] = "medium"  # xs, small, medium, large, xl
-    
+
     # Barra / banner (top/bottom)
     topbar_enabled: Optional[bool] = False
     topbar_text: Optional[str] = "Baixe nosso app"
@@ -41,9 +41,21 @@ class ConfigPayload(BaseModel):
     bottom_bar_icon_color: Optional[str] = "#6B7280"
 
 
+def _normalize_fab_size(size: str | None) -> str:
+    """
+    Garante que fab_size seja uma das opções permitidas.
+    """
+    allowed = {"xs", "small", "medium", "large", "xl"}
+    if not size:
+        return "medium"
+    s = str(size).lower()
+    return s if s in allowed else "medium"
+
+
 def _map_slider_to_size(value: float | None) -> str:
     """
     Converte o valor do slider (0.7–1.5) em small / medium / large.
+    (Usado para topbar, se você quiser manter esse padrão.)
     """
     if value is None:
         return "medium"
@@ -78,7 +90,7 @@ def get_config(
             "fab_icon": "📲",
             "fab_delay": 0,
             "fab_color": "#2563EB",
-            "fab_size": 1.0,  # medium
+            "fab_size": "medium",  # default
             "topbar_enabled": False,
             "topbar_text": "Baixe nosso app",
             "topbar_button_text": "Baixar",
@@ -91,7 +103,7 @@ def get_config(
             "bottom_bar_icon_color": "#6B7280",
         }
 
-    # Converte o small/medium/large salvo em slider numérico pro front
+    # Converte small/medium/large da topbar em slider numérico pro front
     def _size_to_slider(size: str | None) -> float:
         if size == "small":
             return 0.8
@@ -110,7 +122,8 @@ def get_config(
         "fab_icon": config.fab_icon or "📲",
         "fab_delay": config.fab_delay or 0,
         "fab_color": getattr(config, "fab_color", "#2563EB") or "#2563EB",
-        "fab_size": _size_to_slider(getattr(config, "fab_size", "medium")),
+        # agora devolve string direta para o painel (xs/small/medium/large/xl)
+        "fab_size": getattr(config, "fab_size", "medium") or "medium",
         "topbar_enabled": getattr(config, "topbar_enabled", False),
         "topbar_text": getattr(config, "topbar_text", "Baixe nosso app") or "Baixe nosso app",
         "topbar_button_text": getattr(config, "topbar_button_text", "Baixar") or "Baixar",
@@ -173,9 +186,9 @@ def save_config(
     config.fab_icon = payload.fab_icon
     config.fab_delay = payload.fab_delay
     config.fab_color = payload.fab_color
-    config.fab_size = _map_slider_to_size(payload.fab_size)
+    config.fab_size = _normalize_fab_size(payload.fab_size)
 
-    # Topbar / banner
+    # Topbar / banner (mantém small/medium/large via slider)
     config.topbar_enabled = payload.topbar_enabled
     config.topbar_text = payload.topbar_text
     config.topbar_button_text = payload.topbar_button_text
