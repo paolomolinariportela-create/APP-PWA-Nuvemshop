@@ -184,6 +184,73 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         """
 
+    # Script da Barra Fixa (banner de download)
+    topbar_script = ""
+    if topbar_enabled:
+        topbar_script = f"""
+            function initTopbarWidget() {{
+                try {{
+                    if (document.getElementById('pwa-topbar-widget')) return;
+
+                    var bar = document.createElement('div');
+                    bar.id = 'pwa-topbar-widget';
+                    bar.style.cssText = `
+                        position:fixed;
+                        { 'top:0;' if topbar_position == 'top' else 'bottom:0;' }
+                        left:0;
+                        right:0;
+                        background:{topbar_color};
+                        color:{topbar_text_color};
+                        padding:10px 14px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:space-between;
+                        font-family:sans-serif;
+                        font-size:13px;
+                        z-index:2147483646;
+                        box-shadow:0 2px 8px rgba(0,0,0,0.3);
+                    `;
+
+                    var left = document.createElement('div');
+                    left.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+                    var iconSpan = document.createElement('span');
+                    iconSpan.textContent = "{topbar_icon}";
+                    iconSpan.style.fontSize = "16px";
+
+                    var textSpan = document.createElement('span');
+                    textSpan.textContent = "{topbar_text}";
+                    textSpan.style.flex = "1";
+
+                    left.appendChild(iconSpan);
+                    left.appendChild(textSpan);
+
+                    var btn = document.createElement('button');
+                    btn.textContent = "{topbar_button_text}";
+                    btn.style.cssText = `
+                        background:#FBBF24;
+                        border:none;
+                        border-radius:999px;
+                        padding:6px 12px;
+                        font-size:12px;
+                        font-weight:600;
+                        cursor:pointer;
+                    `;
+                    btn.onclick = function() {{
+                        // Aqui você pode abrir o mesmo fluxo do FAB,
+                        // por enquanto vamos só rolar para o topo
+                        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+                    }};
+
+                    bar.appendChild(left);
+                    bar.appendChild(btn);
+                    document.body.appendChild(bar);
+                }} catch (e) {{
+                    console.log("Topbar widget error:", e);
+                }}
+            }}
+        """
+        
     # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
     bottom_bar_script = f"""
         function isPwaMode() {{
@@ -634,19 +701,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('Critical block error:', e);
         }}
 
-        // Bloco diferido: FAB e tracking
-        setTimeout(function () {{
-            try {{
+        // Bloco diferido: FAB, Topbar e tracking
+        setTimeout(function () {
+            try {
                 {fab_script}
-                if (typeof initFab === 'function') {{
+                {topbar_script}
+                if (typeof initFab === 'function') {
                     initFab();
-                }}
+                }
+                if (typeof initTopbarWidget === 'function') {
+                    initTopbarWidget();
+                }
                 initVariantTracking();
                 initSalesTracking();
-            }} catch (e) {{
-                console.log('Deferred block error (FAB/Analytics):', e);
-            }}
-        }}, 800);
+            } catch (e) {
+                console.log('Deferred block error (FAB/Topbar/Analytics):', e);
+            }
+        }, 800);
 
         // Bottom bar: inicializa assim que o DOM estiver pronto
         if (document.readyState === 'loading') {{
