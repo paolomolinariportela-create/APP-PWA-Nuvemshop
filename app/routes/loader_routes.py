@@ -47,26 +47,24 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_delay = getattr(config, "fab_delay", 0) or 0
 
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
+    fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # Fator numérico vindo do painel (0.7–1.5). Se vier string, converte.
-    raw_factor = getattr(config, "fab_size", 1.0) if config else 1.0
-    try:
-        fab_factor = float(raw_factor)
-    except (TypeError, ValueError):
-        fab_factor = 1.0
-
-    # Clampa para evitar exageros
-    if fab_factor < 0.7:
-        fab_factor = 0.7
-    if fab_factor > 1.5:
-        fab_factor = 1.5
-
-    # Tamanho base em px (pílula padrão de mercado)
-    base_width = 90   # largura base
-    base_height = 54  # altura base
-
-    fab_width = int(base_width * fab_factor)
-    fab_height = int(base_height * fab_factor)
+    # 5 tamanhos fixos para o FAB
+    if fab_size == "xs":
+        fab_width = 54
+        fab_height = 46
+    elif fab_size == "small":
+        fab_width = 70
+        fab_height = 50
+    elif fab_size == "large":
+        fab_width = 120
+        fab_height = 60
+    elif fab_size == "xl":
+        fab_width = 140
+        fab_height = 66
+    else:  # medium
+        fab_width = 90
+        fab_height = 54
 
     # Distância das bordas (padrão: canto inferior, acima da bottom bar)
     offset_px = 56
