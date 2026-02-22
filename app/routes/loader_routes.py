@@ -76,295 +76,291 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_color = getattr(config, "topbar_color", None) or "#111827"
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
 
-    # FAB script
+    # --- FAB SCRIPT ---
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
-            function initFab() {{
-                if (window.innerWidth >= 900 || isApp) return;
+        function initFab() {{
+            if (window.innerWidth >= 900 || isApp) return;
 
-                setTimeout(function() {{
-                    var fab = document.createElement('div');
-                    fab.id = 'pwa-fab-btn';
-                    fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
+            setTimeout(function() {{
+                var fab = document.createElement('div');
+                fab.id = 'pwa-fab-btn';
+                fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
 
-                    var iconSpan = document.createElement('span');
-                    iconSpan.style.fontSize = "20px";
-                    iconSpan.textContent = "{fab_icon}";
+                var iconSpan = document.createElement('span');
+                iconSpan.style.fontSize = "20px";
+                iconSpan.textContent = "{fab_icon}";
 
-                    var textSpan = document.createElement('span');
-                    textSpan.textContent = "{fab_text}";
-                    textSpan.style.whiteSpace = "nowrap";
+                var textSpan = document.createElement('span');
+                textSpan.textContent = "{fab_text}";
+                textSpan.style.whiteSpace = "nowrap";
 
-                    fab.appendChild(iconSpan);
-                    fab.appendChild(textSpan);
+                fab.appendChild(iconSpan);
+                fab.appendChild(textSpan);
 
-                    function showInstallHelpModal() {{
-                        var existing = document.getElementById('pwa-install-modal');
-                        if (existing) existing.remove();
+                function showInstallHelpModal() {{
+                    var existing = document.getElementById('pwa-install-modal');
+                    if (existing) existing.remove();
 
-                        var ua = navigator.userAgent || "";
-                        var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
-                        var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
+                    var ua = navigator.userAgent || "";
+                    var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
+                    var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
 
-                        var steps = "";
-                        if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
-                        }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
-                        }} else {{
-                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
-                        }}
-
-                        var modal = document.createElement('div');
-                        modal.id = 'pwa-install-modal';
-                        modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
-
-                        var box = document.createElement('div');
-                        box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
-
-                        box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
-                                        "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
-                                        "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
-                                        "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
-
-                        modal.appendChild(box);
-                        document.body.appendChild(modal);
-
-                        document.getElementById('pwa-install-modal-close').onclick = function() {{
-                            modal.remove();
-                        }};
+                    var steps = "";
+                    if (isSamsung) {{
+                        steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
+                    }} else if (isSafari) {{
+                        steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
+                    }} else {{
+                        steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
                     }}
 
-                    fab.onclick = function() {{
-                        if (window.deferredPrompt) {{
-                            window.deferredPrompt.prompt();
-                            window.deferredPrompt.userChoice.then(function(choiceResult) {{
-                                if (choiceResult.outcome === 'accepted') {{
-                                    fab.style.display = 'none';
-                                    try {{
-                                        fetch('{final_backend_url}/analytics/install', {{
-                                            method: 'POST',
-                                            headers: {{ 'Content-Type': 'application/json' }},
-                                            body: JSON.stringify({{
-                                                store_id: '{store_id}',
-                                                visitor_id: visitorId
-                                            }})
-                                        }});
-                                    }} catch (e) {{}}
-                                }}
-                                window.deferredPrompt = null;
-                            }});
-                        }} else {{
-                            showInstallHelpModal();
-                        }}
+                    var modal = document.createElement('div');
+                    modal.id = 'pwa-install-modal';
+                    modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2147483648; display:flex; align-items:center; justify-content:center;";
+
+                    var box = document.createElement('div');
+                    box.style.cssText = "background:#ffffff; max-width:90%; border-radius:12px; padding:20px; font-family:sans-serif; color:#222; box-shadow:0 8px 30px rgba(0,0,0,0.25);";
+
+                    box.innerHTML = "<div style='font-size:18px; font-weight:bold; margin-bottom:8px;'>Instalar aplicativo</div>" +
+                                    "<div style='font-size:14px; line-height:1.5; margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
+                                    "<pre style='white-space:pre-wrap; font-size:13px; background:#f5f5f5; padding:10px; border-radius:8px;'>" + steps + "</pre>" +
+                                    "<button id='pwa-install-modal-close' style='margin-top:14px; width:100%; padding:10px 0; border:none; border-radius:8px; background:{color}; color:#fff; font-weight:bold; font-size:14px; cursor:pointer;'>Entendi</button>";
+
+                    modal.appendChild(box);
+                    document.body.appendChild(modal);
+
+                    document.getElementById('pwa-install-modal-close').onclick = function() {{
+                        modal.remove();
                     }};
+                }}
 
+                fab.onclick = function() {{
+                    if (window.deferredPrompt) {{
+                        window.deferredPrompt.prompt();
+                        window.deferredPrompt.userChoice.then(function(choiceResult) {{
+                            if (choiceResult.outcome === 'accepted') {{
+                                fab.style.display = 'none';
+                                try {{
+                                    fetch('{final_backend_url}/analytics/install', {{
+                                        method: 'POST',
+                                        headers: {{ 'Content-Type': 'application/json' }},
+                                        body: JSON.stringify({{
+                                            store_id: '{store_id}',
+                                            visitor_id: visitorId
+                                        }})
+                                    }});
+                                }} catch (e) {{}}
+                            }}
+                            window.deferredPrompt = null;
+                        }});
+                    }} else {{
+                        showInstallHelpModal();
+                    }}
+                }};
+
+                fab.animate(
+                    [{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}],
+                    {{ duration: 500, easing: 'ease-out' }}
+                );
+                document.body.appendChild(fab);
+
+                setInterval(function() {{
                     fab.animate(
-                        [{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}],
-                        {{ duration: 500, easing: 'ease-out' }}
+                        [
+                            {{ transform: 'scale(1)' }},
+                            {{ transform: 'scale(1.05)' }},
+                            {{ transform: 'scale(1)' }}
+                        ],
+                        {{ duration: 1000 }}
                     );
-                    document.body.appendChild(fab);
-
-                    setInterval(function() {{
-                        fab.animate(
-                            [
-                                {{ transform: 'scale(1)' }},
-                                {{ transform: 'scale(1.05)' }},
-                                {{ transform: 'scale(1)' }}
-                            ],
-                            {{ duration: 1000 }}
-                        );
-                    }}, 5000);
-                }}, {fab_delay * 1000});
-            }}
+                }}, 5000);
+            }}, {fab_delay * 1000});
+        }}
         """
 
-    # Topbar script (sem f-string, usando format)
+    # --- TOPBAR SCRIPT (SIMPLES) ---
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        topbar_script = """
-            function initTopbarWidget() {
-                try {
-                    if (document.getElementById('pwa-topbar-widget')) return;
+        safe_topbar_text = (topbar_text or "").replace('"', '\\"')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\"')
 
-                    var bar = document.createElement('div');
-                    bar.id = 'pwa-topbar-widget';
-                    bar.style.cssText = `
-                        position:fixed;
-                        {top_position_css}
-                        left:0;
-                        right:0;
-                        background:{topbar_color};
-                        color:{topbar_text_color};
-                        padding:12px 16px;
-                        display:flex;
-                        align-items:center;
-                        justify-content:space-between;
-                        font-family:sans-serif;
-                        font-size:13px;
-                        z-index:2147483647;
-                        box-shadow:0 2px 8px rgba(0,0,0,0.3);
-                    `;
-
-                    var left = document.createElement('div');
-                    left.style.cssText = "display:flex;align-items:center;gap:8px;";
-
-                    var iconSpan = document.createElement('span');
-                    iconSpan.textContent = "{topbar_icon}";
-                    iconSpan.style.fontSize = "16px";
-
-                    var textSpan = document.createElement('span');
-                    textSpan.textContent = "{topbar_text}";
-                    textSpan.style.flex = "1";
-
-                    left.appendChild(iconSpan);
-                    left.appendChild(textSpan);
-
-                    var btn = document.createElement('button');
-                    btn.textContent = "{topbar_button_text}";
-                    btn.style.cssText = `
-                        background:#FBBF24;
-                        border:none;
-                        border-radius:999px;
-                        padding:6px 12px;
-                        font-size:12px;
-                        font-weight:600;
-                        cursor:pointer;
-                    `;
-                    btn.onclick = function() {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    };
-
-                    bar.appendChild(left);
-                    bar.appendChild(btn);
-                    document.body.appendChild(bar);
-                } catch (e) {
-                    console.log("Topbar widget error:", e);
-                }
-            }
-        """.format(
-            top_position_css=top_position_css,
-            topbar_color=topbar_color,
-            topbar_text_color=topbar_text_color,
-            topbar_icon=topbar_icon,
-            topbar_text=topbar_text.replace('"', '\\"'),
-            topbar_button_text=topbar_button_text.replace('"', '\\"'),
-        )
-
-    # Bottom bar (PWA)
-    bottom_bar_script = f"""
-        function isPwaMode() {{
+        topbar_script = f"""
+        function initTopbarWidget() {{
             try {{
-                if (window.matchMedia) {{
-                    if (window.matchMedia('(display-mode: standalone)').matches) return true;
-                    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
-                    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
-                }}
-                if (window.navigator.standalone === true) return true; // iOS 
-            }} catch (e) {{}}
-            return false;
-        }}
+                if (document.getElementById('pwa-topbar-widget')) return;
 
-        function initBottomBar() {{
-            try {{
-                if (!isPwaMode()) return;
-                if (window.innerWidth > 900) return;
-                if (document.getElementById('pwa-bottom-nav')) return;
-
-                var bar = document.createElement('nav');
-                bar.id = 'pwa-bottom-nav';
+                var bar = document.createElement('div');
+                bar.id = 'pwa-topbar-widget';
                 bar.style.cssText = `
                     position:fixed;
-                    bottom:0;
+                    {top_position_css}
                     left:0;
                     right:0;
-                    height:72px;
-                    background:{bottom_bar_bg};
-                    border-top:1px solid #e5e7eb;
+                    background:{topbar_color};
+                    color:{topbar_text_color};
+                    padding:10px 14px;
                     display:flex;
-                    justify-content:space-around;
                     align-items:center;
-                    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+                    justify-content:space-between;
+                    font-family:sans-serif;
+                    font-size:13px;
                     z-index:2147483647;
-                    padding-bottom: env(safe-area-inset-bottom, 0);
+                    box-shadow:0 2px 8px rgba(0,0,0,0.3);
                 `;
 
-                try {{
-                    var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
-                    var base = parseInt(currentPadding, 10) || 0;
-                    var extra = 72;
-                    document.body.style.paddingBottom = (base + extra) + "px";
-                }} catch (e) {{}}
+                var left = document.createElement('div');
+                left.style.cssText = "display:flex;align-items:center;gap:8px;";
 
-                function createItem(svgPath, label, href) {{
-                    var btn = document.createElement('button');
-                    btn.style.cssText = `
-                        background:none;
-                        border:none;
-                        display:flex;
-                        flex-direction:column;
-                        align-items:center;
-                        justify-content:center;
-                        gap:4px;
-                        font-size:10px;
-                        color:{bottom_bar_icon_color};
-                        cursor:pointer;
-                    `;
-                    btn.onclick = function() {{
-                        try {{
-                            if (href) window.location.href = href;
-                        }} catch (e) {{}}
-                    }};
+                var iconSpan = document.createElement('span');
+                iconSpan.textContent = "{topbar_icon}";
+                iconSpan.style.fontSize = "16px";
 
-                    var iconWrapper = document.createElement('div');
-                    iconWrapper.style.cssText = `
-                        width:28px;
-                        height:28px;
-                        display:flex;
-                        align-items:center;
-                        justify-content:center;
-                    `;
+                var textSpan = document.createElement('span');
+                textSpan.textContent = "{safe_topbar_text}";
+                textSpan.style.flex = "1";
 
-                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svg.setAttribute('viewBox', '0 0 24 24');
-                    svg.setAttribute('width', '28');
-                    svg.setAttribute('height', '28');
-                    svg.style.fill = 'currentColor';
+                left.appendChild(iconSpan);
+                left.appendChild(textSpan);
 
-                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    path.setAttribute('d', svgPath);
-                    svg.appendChild(path);
-                    iconWrapper.appendChild(svg);
+                var btn = document.createElement('button');
+                btn.textContent = "{safe_topbar_button_text}";
+                btn.style.cssText = `
+                    background:#FBBF24;
+                    border:none;
+                    border-radius:999px;
+                    padding:6px 12px;
+                    font-size:12px;
+                    font-weight:600;
+                    cursor:pointer;
+                `;
+                btn.onclick = function() {{
+                    window.scrollTo({{ top: 0, behavior: 'smooth' }});
+                }};
 
-                    var text = document.createElement('span');
-                    text.textContent = label;
-                    text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
-
-                    btn.appendChild(iconWrapper);
-                    btn.appendChild(text);
-                    return btn;
-                }}
-
-                var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
-                var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
-                var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
-                var userPath = "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
-
-                bar.appendChild(createItem(homePath, "Início", "/"));
-                bar.appendChild(createItem(shopPath, "Loja", "/produtos"));
-                bar.appendChild(createItem(bellPath, "Alertas", "/notificacoes"));
-                bar.appendChild(createItem(userPath, "Conta", "/minha-conta"));
-
+                bar.appendChild(left);
+                bar.appendChild(btn);
                 document.body.appendChild(bar);
             }} catch (e) {{
-                console.log('Bottom bar error:', e);
+                console.log("Topbar widget error:", e);
             }}
         }}
+        """
+
+    # --- BOTTOM BAR SCRIPT ---
+    bottom_bar_script = f"""
+    function isPwaMode() {{
+        try {{
+            if (window.matchMedia) {{
+                if (window.matchMedia('(display-mode: standalone)').matches) return true;
+                if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+                if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+            }}
+            if (window.navigator.standalone === true) return true;
+        }} catch (e) {{}}
+        return false;
+    }}
+
+    function initBottomBar() {{
+        try {{
+            if (!isPwaMode()) return;
+            if (window.innerWidth > 900) return;
+            if (document.getElementById('pwa-bottom-nav')) return;
+
+            var bar = document.createElement('nav');
+            bar.id = 'pwa-bottom-nav';
+            bar.style.cssText = `
+                position:fixed;
+                bottom:0;
+                left:0;
+                right:0;
+                height:72px;
+                background:{bottom_bar_bg};
+                border-top:1px solid #e5e7eb;
+                display:flex;
+                justify-content:space-around;
+                align-items:center;
+                font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+                z-index:2147483647;
+                padding-bottom: env(safe-area-inset-bottom, 0);
+            `;
+
+            try {{
+                var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
+                var base = parseInt(currentPadding, 10) || 0;
+                var extra = 72;
+                document.body.style.paddingBottom = (base + extra) + "px";
+            }} catch (e) {{}}
+
+            function createItem(svgPath, label, href) {{
+                var btn = document.createElement('button');
+                btn.style.cssText = `
+                    background:none;
+                    border:none;
+                    display:flex;
+                    flex-direction:column;
+                    align-items:center;
+                    justify-content:center;
+                    gap:4px;
+                    font-size:10px;
+                    color:{bottom_bar_icon_color};
+                    cursor:pointer;
+                `;
+                btn.onclick = function() {{
+                    try {{
+                        if (href) window.location.href = href;
+                    }} catch (e) {{}}
+                }};
+
+                var iconWrapper = document.createElement('div');
+                iconWrapper.style.cssText = `
+                    width:28px;
+                    height:28px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                `;
+
+                var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('viewBox', '0 0 24 24');
+                svg.setAttribute('width', '28');
+                svg.setAttribute('height', '28');
+                svg.style.fill = 'currentColor';
+
+                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', svgPath);
+                svg.appendChild(path);
+                iconWrapper.appendChild(svg);
+
+                var text = document.createElement('span');
+                text.textContent = label;
+                text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
+
+                btn.appendChild(iconWrapper);
+                btn.appendChild(text);
+                return btn;
+            }}
+
+            var homePath = "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z";
+            var shopPath = "M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z";
+            var bellPath = "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z";
+            var userPath = "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
+
+            bar.appendChild(createItem(homePath, "Início", "/"));
+            bar.appendChild(createItem(shopPath, "Loja", "/produtos"));
+            bar.appendChild(createItem(bellPath, "Alertas", "/notificacoes"));
+            bar.appendChild(createItem(userPath, "Conta", "/minha-conta"));
+
+            document.body.appendChild(bar);
+        }} catch (e) {{
+            console.log('Bottom bar error:', e);
+        }}
+    }}
     """
 
-    # JS final
+    # --- JS FINAL ---
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v5 - Push Force");
