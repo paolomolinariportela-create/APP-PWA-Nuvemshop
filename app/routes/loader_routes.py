@@ -832,9 +832,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            if (isApp) {{
-                initNotificationBar();
-            }}
+
+            // TEMPORÁRIO: sempre mostrar barra de notificação, mesmo fora do app
+            initNotificationBar();
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
