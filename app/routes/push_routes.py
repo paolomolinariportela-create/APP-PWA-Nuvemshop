@@ -61,20 +61,49 @@ async def subscribe_push(
     db: Session = Depends(get_db),
 ):
     try:
-        print("PUSH SUBSCRIBE: RECEBIDO CHAMADO")
-        print("PUSH SUBSCRIBE RAW BODY:", await request.body())
-        print("PUSH SUBSCRIBE PAYLOAD PARSED:", payload.dict())
+        raw_body = await request.body()
+        print("=== PUSH SUBSCRIBE: CHAMADO ===")
+        print("RAW BODY:", raw_body)
+        print("PARSED PAYLOAD:", payload.dict())
 
         sub_data = payload.subscription
         endpoint = sub_data.get("endpoint")
         keys = sub_data.get("keys", {})
 
-        print("PUSH SUBSCRIBE endpoint:", endpoint)
-        print("PUSH SUBSCRIBE keys:", keys)
+        print("ENDPOINT:", endpoint)
+        print("KEYS:", keys)
 
         if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
-            print("PUSH SUBSCRIBE ERRO: dados incompletos")
+            print("ERRO: dados incompletos de subscription")
             return {"status": "error"}
+
+        exists = (
+            db.query(PushSubscription)
+            .filter(PushSubscription.endpoint == endpoint)
+            .first()
+        )
+        if not exists:
+            print("NOVO ENDPOINT, salvando no banco")
+            db.add(
+                PushSubscription(
+                    store_id=payload.store_id,
+                    visitor_id=payload.visitor_id,
+                    endpoint=endpoint,
+                    p256dh=keys.get("p256dh"),
+                    auth=keys.get("auth"),
+                    created_at=datetime.now().isoformat(),
+                )
+            )
+            db.commit()
+            print("SALVO COM SUCESSO")
+            return {"status": "subscribed"}
+
+        print("ENDPOINT JÁ EXISTE, não salva de novo")
+        return {"status": "already_subscribed"}
+
+    except Exception as e:
+        print("EXCEPTION EM /push/subscribe:", e)
+        return {"status": "error"}
 
         exists = (
             db.query(PushSubscription)
