@@ -78,7 +78,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_position = getattr(config, "topbar_position", None) or "bottom"
     topbar_color = getattr(config, "topbar_color", None) or "#111827"
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
-    topbar_size = getattr(config, "topbar_size", None) or "medium"
 
     # Script do Botão Flutuante (FAB)
     fab_script = ""
@@ -113,11 +112,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
                         var steps = "";
                         if (isSamsung) {{
-                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\\\n2. Escolha Adicionar página a, depois Tela inicial.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else if (isSafari) {{
-                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\\\n2. Selecione Adicionar à Tela de Início.\\\\n3. Confirme o nome do app e toque em Adicionar.";
+                            steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
                         }} else {{
-                            steps = "1. Abra o menu do navegador.\\\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\\\n3. Confirme para instalar o app no seu celular.";
+                            steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
                         }}
 
                         var modal = document.createElement('div');
@@ -170,7 +169,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     );
                     document.body.appendChild(fab);
 
-                    setInterval(() => {{
+                    setInterval(function() {{
                         fab.animate(
                             [
                                 {{ transform: 'scale(1)' }},
@@ -183,6 +182,79 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }}, {fab_delay * 1000});
             }}
         """
+
+    # Script da Barra Fixa (banner de download)
+    topbar_script = ""
+    if topbar_enabled:
+        top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
+        topbar_script = """
+            function initTopbarWidget() {
+                try {
+                    if (document.getElementById('pwa-topbar-widget')) return;
+
+                    var bar = document.createElement('div');
+                    bar.id = 'pwa-topbar-widget';
+                    bar.style.cssText = `
+                        position:fixed;
+                        {top_position_css}
+                        left:0;
+                        right:0;
+                        background:{topbar_color};
+                        color:{topbar_text_color};
+                        padding:10px 14px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:space-between;
+                        font-family:sans-serif;
+                        font-size:13px;
+                        z-index:2147483646;
+                        box-shadow:0 2px 8px rgba(0,0,0,0.3);
+                    `;
+
+                    var left = document.createElement('div');
+                    left.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+                    var iconSpan = document.createElement('span');
+                    iconSpan.textContent = "{topbar_icon}";
+                    iconSpan.style.fontSize = "16px";
+
+                    var textSpan = document.createElement('span');
+                    textSpan.textContent = "{topbar_text}";
+                    textSpan.style.flex = "1";
+
+                    left.appendChild(iconSpan);
+                    left.appendChild(textSpan);
+
+                    var btn = document.createElement('button');
+                    btn.textContent = "{topbar_button_text}";
+                    btn.style.cssText = `
+                        background:#FBBF24;
+                        border:none;
+                        border-radius:999px;
+                        padding:6px 12px;
+                        font-size:12px;
+                        font-weight:600;
+                        cursor:pointer;
+                    `;
+                    btn.onclick = function() {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    };
+
+                    bar.appendChild(left);
+                    bar.appendChild(btn);
+                    document.body.appendChild(bar);
+                } catch (e) {
+                    console.log("Topbar widget error:", e);
+                }
+            }
+        """.format(
+            top_position_css=top_position_css,
+            topbar_color=topbar_color,
+            topbar_text_color=topbar_text_color,
+            topbar_icon=topbar_icon,
+            topbar_text=topbar_text.replace('"', '\\"'),
+            topbar_button_text=topbar_button_text.replace('"', '\\"'),
+        )
 
     # --- SCRIPT DA BOTTOM BAR DO APP (NAV INFERIOR DO PWA) ---
     bottom_bar_script = f"""
@@ -634,17 +706,21 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('Critical block error:', e);
         }}
 
-        // Bloco diferido: FAB e tracking
+        // Bloco diferido: FAB, Topbar e tracking
         setTimeout(function () {{
             try {{
                 {fab_script}
+                {topbar_script}
                 if (typeof initFab === 'function') {{
                     initFab();
+                }}
+                if (typeof initTopbarWidget === 'function') {{
+                    initTopbarWidget();
                 }}
                 initVariantTracking();
                 initSalesTracking();
             }} catch (e) {{
-                console.log('Deferred block error (FAB/Analytics):', e);
+                console.log('Deferred block error (FAB/Topbar/Analytics):', e);
             }}
         }}, 800);
 
