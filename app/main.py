@@ -33,7 +33,8 @@ def ensure_app_config_table_and_columns():
     print("[DB MIGRATION] Verificando tabela app_config...")
 
     # 1) Garante que a tabela app_config exista (mínimo)
-    cur.execute("""
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
             store_id VARCHAR(255) NOT NULL UNIQUE,
@@ -42,7 +43,8 @@ def ensure_app_config_table_and_columns():
             logo_url TEXT,
             whatsapp_number VARCHAR(50)
         );
-    """)
+    """
+    )
 
     # 2) TODAS as colunas que queremos garantir (incluindo novas)
     desired_columns = {
@@ -55,6 +57,7 @@ def ensure_app_config_table_and_columns():
         "fab_text": "VARCHAR DEFAULT 'Baixar App'",
         "fab_color": "VARCHAR DEFAULT '#2563EB'",
         "fab_size": "VARCHAR DEFAULT 'medium'",
+        "fab_background_image_url": "TEXT",  # NOVO
 
         # TOP/BOTTOM BAR (banner / barra do widget)
         "topbar_enabled": "BOOLEAN DEFAULT FALSE",
@@ -70,18 +73,27 @@ def ensure_app_config_table_and_columns():
         "topbar_button_bg_color": "VARCHAR DEFAULT '#FBBF24'",
         "topbar_button_text_color": "VARCHAR DEFAULT '#111827'",
 
+        # NOVO: imagem de fundo da barra fixa
+        "topbar_background_image_url": "TEXT",
+
+        # POPUP DE INSTALAÇÃO
+        "popup_enabled": "BOOLEAN DEFAULT FALSE",
+        "popup_image_url": "TEXT",
+
         # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
     }
 
     # 3) Colunas existentes hoje
-    cur.execute("""
+    cur.execute(
+        """
         SELECT column_name
         FROM information_schema.columns
         WHERE table_name = 'app_config'
           AND table_schema = 'public';
-    """)
+    """
+    )
     existing_cols = {row[0] for row in cur.fetchall()}
 
     # 4) Cria só o que estiver faltando
@@ -89,10 +101,7 @@ def ensure_app_config_table_and_columns():
         if col_name not in existing_cols:
             alter_stmt = sql.SQL(
                 "ALTER TABLE app_config ADD COLUMN {name} {ctype};"
-            ).format(
-                name=sql.Identifier(col_name),
-                ctype=sql.SQL(col_type)
-            )
+            ).format(name=sql.Identifier(col_name), ctype=sql.SQL(col_type))
             print(f"[DB MIGRATION] Adicionando coluna: {col_name} ({col_type})")
             try:
                 cur.execute(alter_stmt)
@@ -119,14 +128,16 @@ def ensure_lojas_logo_column():
     print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
 
     # Verifica se a tabela lojas existe
-    cur.execute("""
+    cur.execute(
+        """
         SELECT EXISTS (
             SELECT 1
             FROM information_schema.tables
             WHERE table_name = 'lojas'
               AND table_schema = 'public'
         );
-    """)
+    """
+    )
     exists = cur.fetchone()[0]
     if not exists:
         print("[DB MIGRATION] Tabela lojas não existe, nada a fazer.")
@@ -135,12 +146,14 @@ def ensure_lojas_logo_column():
         return
 
     # Verifica se a coluna logo_url já existe
-    cur.execute("""
+    cur.execute(
+        """
         SELECT column_name
         FROM information_schema.columns
         WHERE table_name = 'lojas'
           AND table_schema = 'public';
-    """)
+    """
+    )
     existing_cols = {row[0] for row in cur.fetchall()}
 
     if "logo_url" not in existing_cols:
