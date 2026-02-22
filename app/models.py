@@ -35,7 +35,8 @@ class AppConfig(Base):
     fab_enabled = Column(Boolean, default=False)     # Botão Flutuante 'Baixar App'
     fab_text = Column(String, default="Baixar App")
     fab_color = Column(String, default="#2563EB")    # cor do botão
-    fab_size = Column(String, default="medium")      # 'small' | 'medium' | 'large'
+    fab_size = Column(String, default="medium")      # 'xs' | 'small' | 'medium' | 'large' | 'xl'
+    fab_background_image_url = Column(String, nullable=True)  # NOVO: imagem de fundo do FAB
 
     # TOP/BOTTOM BAR (banner / barra inferior do widget)
     topbar_enabled = Column(Boolean, default=False)          # habilita banner/barra
@@ -45,11 +46,18 @@ class AppConfig(Base):
     topbar_position = Column(String, default="bottom")       # 'top' ou 'bottom'
     topbar_color = Column(String, default="#111827")         # cor de fundo
     topbar_text_color = Column(String, default="#FFFFFF")    # cor do texto
-    topbar_size = Column(String, default="medium")           # tamanho
+    topbar_size = Column(String, default="medium")           # 'xs' | 'small' | 'medium' | 'large' | 'xl'
 
     # NOVOS CAMPOS – cores independentes do botão da barra
     topbar_button_bg_color = Column(String, default="#FBBF24", nullable=True)
     topbar_button_text_color = Column(String, default="#111827", nullable=True)
+
+    # NOVO: imagem de fundo da barra fixa
+    topbar_background_image_url = Column(String, nullable=True)
+
+    # POPUP DE INSTALAÇÃO
+    popup_enabled = Column(Boolean, default=False)
+    popup_image_url = Column(String, nullable=True)
 
     # BOTTOM BAR DO APP (barra de navegação inferior do PWA)
     bottom_bar_bg = Column(String, default="#FFFFFF")          # Fundo da barra
