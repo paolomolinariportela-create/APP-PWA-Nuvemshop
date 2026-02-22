@@ -36,15 +36,16 @@ class ConfigPayload(BaseModel):
     topbar_text_color: Optional[str] = "#FFFFFF"
     topbar_size: Optional[float] = 1.0  # slider 0.8–1.4 no front
 
+    # NOVOS CAMPOS – cores independentes do botão da barra
+    topbar_button_bg_color: Optional[str] = "#FBBF24"
+    topbar_button_text_color: Optional[str] = "#111827"
+
     # Bottom bar
     bottom_bar_bg: Optional[str] = "#FFFFFF"
     bottom_bar_icon_color: Optional[str] = "#6B7280"
 
 
 def _normalize_fab_size(size: str | None) -> str:
-    """
-    Garante que fab_size seja uma das opções permitidas.
-    """
     allowed = {"xs", "small", "medium", "large", "xl"}
     if not size:
         return "medium"
@@ -53,10 +54,6 @@ def _normalize_fab_size(size: str | None) -> str:
 
 
 def _map_slider_to_size(value: float | None) -> str:
-    """
-    Converte o valor do slider (0.7–1.5) em small / medium / large.
-    (Usado para topbar, se você quiser manter esse padrão.)
-    """
     if value is None:
         return "medium"
     try:
@@ -99,11 +96,12 @@ def get_config(
             "topbar_color": "#111827",
             "topbar_text_color": "#FFFFFF",
             "topbar_size": 1.0,  # medium
+            "topbar_button_bg_color": "#FBBF24",
+            "topbar_button_text_color": "#111827",
             "bottom_bar_bg": "#FFFFFF",
             "bottom_bar_icon_color": "#6B7280",
         }
 
-    # Converte small/medium/large da topbar em slider numérico pro front
     def _size_to_slider(size: str | None) -> float:
         if size == "small":
             return 0.8
@@ -122,8 +120,8 @@ def get_config(
         "fab_icon": config.fab_icon or "📲",
         "fab_delay": config.fab_delay or 0,
         "fab_color": getattr(config, "fab_color", "#2563EB") or "#2563EB",
-        # agora devolve string direta para o painel (xs/small/medium/large/xl)
         "fab_size": getattr(config, "fab_size", "medium") or "medium",
+
         "topbar_enabled": getattr(config, "topbar_enabled", False),
         "topbar_text": getattr(config, "topbar_text", "Baixe nosso app") or "Baixe nosso app",
         "topbar_button_text": getattr(config, "topbar_button_text", "Baixar") or "Baixar",
@@ -132,6 +130,11 @@ def get_config(
         "topbar_color": getattr(config, "topbar_color", "#111827") or "#111827",
         "topbar_text_color": getattr(config, "topbar_text_color", "#FFFFFF") or "#FFFFFF",
         "topbar_size": _size_to_slider(getattr(config, "topbar_size", "medium")),
+
+        # NOVOS CAMPOS – devolve cores do botão da barra
+        "topbar_button_bg_color": getattr(config, "topbar_button_bg_color", "#FBBF24") or "#FBBF24",
+        "topbar_button_text_color": getattr(config, "topbar_button_text_color", "#111827") or "#111827",
+
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
         "bottom_bar_icon_color": getattr(
             config, "bottom_bar_icon_color", "#6B7280"
@@ -148,7 +151,6 @@ def get_store_info(
     if not loja:
         return {"url": "", "logo_url": ""}
 
-    # se ainda não temos logo salva, tenta sincronizar uma vez com a Nuvemshop
     if not loja.logo_url:
         print("[STORE-INFO] logo_url vazia, buscando na Nuvemshop...")
         sync_store_logo_from_nuvemshop(db, loja)
@@ -188,7 +190,7 @@ def save_config(
     config.fab_color = payload.fab_color
     config.fab_size = _normalize_fab_size(payload.fab_size)
 
-    # Topbar / banner (mantém small/medium/large via slider)
+    # Topbar / banner
     config.topbar_enabled = payload.topbar_enabled
     config.topbar_text = payload.topbar_text
     config.topbar_button_text = payload.topbar_button_text
@@ -197,6 +199,10 @@ def save_config(
     config.topbar_color = payload.topbar_color
     config.topbar_text_color = payload.topbar_text_color
     config.topbar_size = _map_slider_to_size(payload.topbar_size)
+
+    # NOVOS CAMPOS – salvar cores do botão da barra
+    config.topbar_button_bg_color = payload.topbar_button_bg_color
+    config.topbar_button_text_color = payload.topbar_button_text_color
 
     # Bottom bar
     config.bottom_bar_bg = payload.bottom_bar_bg
