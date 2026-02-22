@@ -51,16 +51,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     # 5 tamanhos fixos para o FAB
     if fab_size == "xs":
-        fab_width = 54
+        fab_width = 70
         fab_height = 46
     elif fab_size == "small":
-        fab_width = 70
+        fab_width = 90
         fab_height = 50
     elif fab_size == "large":
-        fab_width = 120
+        fab_width = 140
         fab_height = 60
     elif fab_size == "xl":
-        fab_width = 140
+        fab_width = 160
         fab_height = 66
     else:  # medium
         fab_width = 90
