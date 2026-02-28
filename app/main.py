@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from app.routes.sw_routes import sw_router
 
 # --- IMPORTS INTERNOS ---
 from app.database import engine, Base
@@ -9,6 +10,9 @@ from app.database import engine, Base
 # --- MIGRAÇÃO SIMPLES DO app_config E lojas ---
 import psycopg2
 from psycopg2 import sql
+
+# depois de criar o app = FastAPI(...)
+app.include_router(sw_router)
 
 
 def get_db_url():
