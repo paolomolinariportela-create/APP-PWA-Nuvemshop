@@ -1,4 +1,3 @@
-# app/routes/sw_routes.py
 from fastapi import APIRouter, Response
 
 sw_router = APIRouter()
@@ -101,4 +100,8 @@ self.addEventListener('notificationclick', function(event) {
   event.waitUntil(clients.openWindow(event.notification.data.url));
 });
 """
-    return Response(content=sw_code, media_type="application/javascript")
+    return Response(
+        content=sw_code,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"}
+    )
