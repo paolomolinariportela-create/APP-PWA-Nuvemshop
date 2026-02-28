@@ -603,26 +603,18 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         async function subscribePush() {{
-            console.log("PUSH: subscribePush() chamado");
-            if (!('serviceWorker' in navigator) || !publicVapidKey) {{
-                console.log("PUSH: navegador sem SW ou VAPID PUBLIC KEY ausente");
+            console.log("PUSH: subscribePush() chamado (sem checar Notification.permission)");
+
+            if (!('serviceWorker' in navigator)) {{
+                console.log("PUSH: navegador não suporta serviceWorker");
                 return;
             }}
-            try {{
-                console.log("PUSH: Notification.permission =", Notification.permission);
-                if (Notification.permission === 'default') {{
-                    console.log("PUSH: pedindo permissão de notificação...");
-                    const perm = await Notification.requestPermission();
-                    console.log("PUSH: resultado Notification.permission =", perm);
-                    if (perm !== 'granted') {{
-                        console.log("PUSH: permissão não concedida, abortando");
-                        return;
-                    }}
-                }} else if (Notification.permission === 'denied') {{
-                    console.log("PUSH: permissão já negada, abortando");
-                    return;
-                }}
+            if (!publicVapidKey) {{
+                console.log("PUSH: VAPID PUBLIC KEY vazia, abortando");
+                return;
+            }}
 
+            try {{
                 console.log("PUSH: registrando Service Worker via proxy...");
                 const registration = await navigator.serviceWorker.register(
                     '/apps/app-builder/service-worker.js',
@@ -641,22 +633,21 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 console.log("PUSH: enviando inscrição para backend...");
                 const res = await fetch('{final_backend_url}/push/subscribe', {{
                     method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{
                         subscription: subscription,
                         store_id: '{store_id}',
                         visitor_id: visitorId
-                    }}),
-                    headers: {{ 'Content-Type': 'application/json' }}
+                    }})
                 }});
                 console.log("PUSH: resposta backend status =", res.status);
+                let txt = "";
                 try {{
-                    const json = await res.json();
-                    console.log("PUSH: resposta backend json =", json);
-                }} catch (e) {{
-                    console.log("PUSH: não conseguiu parsear JSON da resposta");
-                }}
+                    txt = await res.text();
+                }} catch (e) {{}}
+                console.log("PUSH: resposta backend body =", txt);
             }} catch (err) {{
-                console.error("❌ Erro Push:", err);
+                console.error("❌ Erro Push (subscribe ou fetch):", err);
             }}
         }}
 
@@ -832,8 +823,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initInstallCapture();
             initAnalytics();
 
-            // TEMPORÁRIO: sempre mostrar barra de notificação, mesmo fora do app
+            // se quiser manter a barra, ok
             initNotificationBar();
+
+            // TENTATIVA AUTOMÁTICA DE INSCRIÇÃO NO LOAD
+            subscribePush();
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
