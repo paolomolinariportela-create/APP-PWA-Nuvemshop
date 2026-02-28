@@ -11,7 +11,10 @@ from app.database import engine, Base
 import psycopg2
 from psycopg2 import sql
 
-# depois de criar o app = FastAPI(...)
+# 1) Cria o app primeiro
+app = FastAPI()
+
+# 2) Depois inclui os routers
 app.include_router(sw_router)
 
 
