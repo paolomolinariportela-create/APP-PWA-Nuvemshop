@@ -6,7 +6,6 @@ from app.models import AppConfig
 
 router = APIRouter()
 
-# --- CONFIGURAÇÕES DE AMBIENTE ---
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
@@ -20,7 +19,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     Gera o script loader.js personalizado para cada loja.
     Uso: <script src="https://sua-api.com/loader.js?store_id=123"></script>
     """
-
     final_backend_url = BACKEND_URL or str(request.base_url).rstrip("/")
 
     try:
@@ -48,7 +46,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
 
-    # NOVO: imagem de fundo do FAB (se quiser usar depois)
     fab_background_image_url = getattr(config, "fab_background_image_url", "") or ""
 
     if fab_size == "xs":
@@ -78,10 +75,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_position = getattr(config, "topbar_position", None) or "bottom"
     topbar_color = getattr(config, "topbar_color", None) or "#111827"
     topbar_text_color = getattr(config, "topbar_text_color", None) or "#FFFFFF"
-    # NOVOS CAMPOS: cores independentes do botão da barra
     topbar_button_bg_color = getattr(config, "topbar_button_bg_color", None) or "#FBBF24"
     topbar_button_text_color = getattr(config, "topbar_button_text_color", None) or "#111827"
-    # NOVO: imagem de fundo da barra
     topbar_background_image_url = getattr(config, "topbar_background_image_url", "") or ""
 
     # --- POPUP DE INSTALAÇÃO ---
@@ -159,8 +154,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\')
 
         background_style = (
             f"background-image:url('{topbar_background_image_url}');"
@@ -382,7 +377,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
-    # --- BOTTOM BAR SCRIPT ---
+    # --- BOTTOM BAR SCRIPT (igual ao seu) ---
     bottom_bar_script = f"""
     function isPwaMode() {{
         try {{
@@ -586,6 +581,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             window.addEventListener('beforeinstallprompt', function(e) {{
                 e.preventDefault();
                 window.deferredPrompt = e;
+                if (typeof initInstallPopup === 'function') {{
+                    initInstallPopup();
+                }}
             }});
         }}
 
@@ -617,7 +615,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             try {{
                 console.log("PUSH: registrando Service Worker via proxy...");
                 const registration = await navigator.serviceWorker.register(
-                    '/https://web-production-0b509.up.railway.app/sw.js',
+                    '/app-builder/sw.js',
                     {{ scope: '/' }}
                 );
                 const readyReg = await navigator.serviceWorker.ready;
@@ -700,7 +698,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         function initNotificationBar() {{
-            // TEMPORÁRIO: ignorar isApp para debug
             showNotificationTopBar();
         }}
 
@@ -822,11 +819,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-
-            // se quiser manter a barra, ok
             initNotificationBar();
-
-            // TENTATIVA AUTOMÁTICA DE INSCRIÇÃO NO LOAD
             subscribePush();
         }} catch (e) {{
             console.log('Critical block error:', e);
