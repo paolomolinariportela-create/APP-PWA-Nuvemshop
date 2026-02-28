@@ -2,24 +2,15 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routes.sw_routes import sw_router
 
-# --- IMPORTS INTERNOS ---
+from app.routes.sw_routes import sw_router
 from app.database import engine, Base
 
-# --- MIGRAÇÃO SIMPLES DO app_config E lojas ---
 import psycopg2
 from psycopg2 import sql
 
-# 1) Cria o app primeiro
-app = FastAPI()
-
-# 2) Depois inclui os routers
-app.include_router(sw_router)
-
 
 def get_db_url():
-    # Ajuste os nomes se seu projeto usar outra variável no Railway
     return (
         os.environ.get("DATABASE_URL")
         or os.environ.get("POSTGRES_URL")
@@ -39,7 +30,6 @@ def ensure_app_config_table_and_columns():
 
     print("[DB MIGRATION] Verificando tabela app_config...")
 
-    # 1) Garante que a tabela app_config exista (mínimo)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS app_config (
@@ -53,9 +43,7 @@ def ensure_app_config_table_and_columns():
     """
     )
 
-    # 2) TODAS as colunas que queremos garantir (incluindo novas)
     desired_columns = {
-        # FAB
         "fab_position": "VARCHAR",
         "fab_icon": "VARCHAR",
         "fab_animation": "BOOLEAN DEFAULT TRUE",
@@ -64,9 +52,7 @@ def ensure_app_config_table_and_columns():
         "fab_text": "VARCHAR DEFAULT 'Baixar App'",
         "fab_color": "VARCHAR DEFAULT '#2563EB'",
         "fab_size": "VARCHAR DEFAULT 'medium'",
-        "fab_background_image_url": "TEXT",  # NOVO
-
-        # TOP/BOTTOM BAR (banner / barra do widget)
+        "fab_background_image_url": "TEXT",
         "topbar_enabled": "BOOLEAN DEFAULT FALSE",
         "topbar_text": "VARCHAR DEFAULT 'Baixe nosso app'",
         "topbar_button_text": "VARCHAR DEFAULT 'Baixar'",
@@ -75,24 +61,15 @@ def ensure_app_config_table_and_columns():
         "topbar_color": "VARCHAR DEFAULT '#111827'",
         "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
         "topbar_size": "VARCHAR DEFAULT 'medium'",
-
-        # NOVOS CAMPOS – cores independentes do botão da barra
         "topbar_button_bg_color": "VARCHAR DEFAULT '#FBBF24'",
         "topbar_button_text_color": "VARCHAR DEFAULT '#111827'",
-
-        # NOVO: imagem de fundo da barra fixa
         "topbar_background_image_url": "TEXT",
-
-        # POPUP DE INSTALAÇÃO
         "popup_enabled": "BOOLEAN DEFAULT FALSE",
         "popup_image_url": "TEXT",
-
-        # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
     }
 
-    # 3) Colunas existentes hoje
     cur.execute(
         """
         SELECT column_name
@@ -103,7 +80,6 @@ def ensure_app_config_table_and_columns():
     )
     existing_cols = {row[0] for row in cur.fetchall()}
 
-    # 4) Cria só o que estiver faltando
     for col_name, col_type in desired_columns.items():
         if col_name not in existing_cols:
             alter_stmt = sql.SQL(
@@ -134,7 +110,6 @@ def ensure_lojas_logo_column():
 
     print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
 
-    # Verifica se a tabela lojas existe
     cur.execute(
         """
         SELECT EXISTS (
@@ -152,7 +127,6 @@ def ensure_lojas_logo_column():
         conn.close()
         return
 
-    # Verifica se a coluna logo_url já existe
     cur.execute(
         """
         SELECT column_name
@@ -183,7 +157,7 @@ def run_all_migrations():
     ensure_lojas_logo_column()
 
 
-# --- IMPORT DAS ROTAS ---
+# IMPORT DAS ROTAS
 from app.routes import (
     auth_routes,
     admin_routes,
@@ -193,48 +167,42 @@ from app.routes import (
     pwa_routes,
 )
 
-# 1) Roda as migrações simples antes de criar as tabelas do SQLAlchemy
+# Migrações + criação de tabelas
 run_all_migrations()
-
-# 2) Inicializa as tabelas do Banco de Dados gerenciadas pelo SQLAlchemy
 Base.metadata.create_all(bind=engine)
 
-# Cria a aplicação FastAPI
+# ÚNICA instância do app
 app = FastAPI(
     title="App Builder Pro API",
     description="API Modular para criação de PWAs, Push Notifications e Analytics.",
     version="2.0.0",
 )
 
-# --- CONFIGURAÇÃO DE CORS ---
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, ideal restringir aos domínios dos clientes
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- REGISTRO DAS ROTAS (ROUTERS) ---
-
-# 1. Autenticação e Admin
+# Routers principais
+app.include_router(sw_router)                 # <-- sw.js entra aqui
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
-
-# 2. Funcionalidades do App
 app.include_router(loader_routes.router, tags=["Loader"])
 app.include_router(push_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(pwa_routes.router, tags=["PWA"])
 
 
-# --- ROTA DE SAÚDE (HEALTH CHECK) ---
 @app.get("/health", tags=["System"])
 def health_check():
     return {"status": "Online 🚀", "service": "App Builder Pro - Modular API"}
 
 
-# --- SERVINDO O FRONTEND (Sempre por último) ---
+# Frontend estático
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
