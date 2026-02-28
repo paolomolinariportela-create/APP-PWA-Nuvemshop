@@ -617,7 +617,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             try {{
                 console.log("PUSH: registrando Service Worker via proxy...");
                 const registration = await navigator.serviceWorker.register(
-                    'https://web-production-0b509.up.railway.app/sw.js',
+                    '/app-builder/sw.js',
                     {{ scope: '/' }}
                 );
                 const readyReg = await navigator.serviceWorker.ready;
