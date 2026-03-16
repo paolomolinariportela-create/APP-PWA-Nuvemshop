@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routes.sw_routes import sw_router
 from app.database import engine, Base
 
 import psycopg2
@@ -188,7 +187,7 @@ app.add_middleware(
 )
 
 # Routers principais
-app.include_router(sw_router)                 # <-- sw.js entra aqui
+# (sw_router removido, sw.js agora é servido pelo front/OneSignal)
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(loader_routes.router, tags=["Loader"])
