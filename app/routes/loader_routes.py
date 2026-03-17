@@ -405,9 +405,33 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Barra de notificação — aparece SOMENTE dentro do PWA instalado
+        // ✅ OneSignal inicializado NA LOJA — só dentro do PWA instalado
+        function initOneSignalInApp() {{
+            if (!isApp) return;
+
+            // Injeta SDK apenas uma vez
+            if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
+                var sdkScript = document.createElement('script');
+                sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+                sdkScript.defer = true;
+                document.head.appendChild(sdkScript);
+            }}
+
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            window.OneSignalDeferred.push(async function(OneSignal) {{
+                window.OneSignal = OneSignal;
+                await OneSignal.init({{
+                    appId: '91487f5b-2269-4d8a-8001-e9bb8b76bb38',
+                    serviceWorkerPath: '/app-builder/sw.js',
+                    serviceWorkerParam: {{ scope: '/' }},
+                }});
+                console.log('✅ OneSignal inicializado no PWA da loja');
+            }});
+        }}
+
+        // ✅ Barra de notificação — só dentro do PWA instalado
         function initNotificationBar() {{
-            if (!isApp) return;                       // ✅ só dentro do PWA
+            if (!isApp) return;
             if (localStorage.getItem('pwa_notif_dismissed')) return;
             if (document.getElementById('pwa-notification-bar')) return;
 
@@ -433,12 +457,22 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
             document.getElementById('pwa-notif-allow').onclick = function() {{
                 bar.remove();
-                if (window.OneSignal) {{
-                    window.OneSignal.Slidedown.promptPush();
-                }} else {{
-                    Notification.requestPermission();
-                }}
+                // ✅ Aguarda o SDK do OneSignal carregar antes de pedir permissão
+                var tentativas = 0;
+                var tryPrompt = function() {{
+                    tentativas++;
+                    if (window.OneSignal) {{
+                        window.OneSignal.Slidedown.promptPush();
+                    }} else if (tentativas < 20) {{
+                        setTimeout(tryPrompt, 500);
+                    }} else {{
+                        // fallback após 10s se OneSignal não carregar
+                        Notification.requestPermission();
+                    }}
+                }};
+                tryPrompt();
             }};
+
             document.getElementById('pwa-notif-close').onclick = function() {{
                 localStorage.setItem('pwa_notif_dismissed', '1');
                 bar.remove();
@@ -528,7 +562,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initNotificationBar();
+            initOneSignalInApp();  // ✅ inicializa SDK do OneSignal na loja (só se PWA)
+            initNotificationBar(); // ✅ mostra barra (só se PWA)
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
