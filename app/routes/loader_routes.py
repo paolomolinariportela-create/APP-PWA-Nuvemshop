@@ -10,7 +10,6 @@ BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
 
-# ✅ FIX: busca do ambiente
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
 
@@ -66,11 +65,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     popup_enabled = bool(getattr(config, "popup_enabled", False)) if config else False
     popup_image_url = getattr(config, "popup_image_url", "") or ""
 
+    # --- FAB SCRIPT ---
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
         function initFab() {{
-            if (window.innerWidth >= 900 || isApp) return;
+            if (isApp) return;
+            if (window.innerWidth >= 900) return;
             setTimeout(function() {{
                 var fab = document.createElement('div');
                 fab.id = 'pwa-fab-btn';
@@ -118,6 +119,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
+    # --- TOPBAR SCRIPT ---
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
@@ -131,10 +133,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         topbar_script = f"""
         function initTopbarWidget() {{
             try {{
+                if (isApp) return;                   // ✅ já instalado como PWA
+                if (window.innerWidth >= 900) return; // ✅ desktop
                 if (document.getElementById('pwa-topbar-widget')) return;
+
                 var bar = document.createElement('div');
                 bar.id = 'pwa-topbar-widget';
                 bar.style.cssText = `position:fixed;{top_position_css}left:0;right:0;{background_style}color:{topbar_text_color};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:13px;z-index:2147483647;box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
+
                 try {{
                     var barHeight = 44;
                     if ("{topbar_position}" === "top") {{
@@ -145,6 +151,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         document.body.style.paddingBottom = (parseInt(currentBottom, 10) || 0) + barHeight + "px";
                     }}
                 }} catch (e) {{}}
+
                 var left = document.createElement('div');
                 left.style.cssText = "display:flex;align-items:center;gap:8px;";
                 var iconSpan = document.createElement('span');
@@ -155,6 +162,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 overlayText.style.flex = "1";
                 left.appendChild(iconSpan);
                 left.appendChild(overlayText);
+
                 var btn = document.createElement('button');
                 btn.textContent = "{safe_topbar_button_text}";
                 btn.style.cssText = `background:{topbar_button_bg_color};color:{topbar_button_text_color};border:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;`;
@@ -177,6 +185,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         showInstallHelpModal();
                     }}
                 }};
+
                 bar.appendChild(left);
                 bar.appendChild(btn);
                 document.body.appendChild(bar);
@@ -186,23 +195,30 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
+    # --- POPUP SCRIPT ---
     popup_script = ""
     if popup_enabled and popup_image_url:
         popup_script = f"""
         function initInstallPopup() {{
             try {{
-                if (window.innerWidth >= 900) return;
+                if (isApp) return;                   // ✅ já instalado como PWA
+                if (window.innerWidth >= 900) return; // ✅ desktop
                 if (!window.deferredPrompt) return;
                 if (document.getElementById('pwa-install-popup')) return;
+
                 var overlay = document.createElement('div');
                 overlay.id = 'pwa-install-popup';
                 overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;`;
+
                 var box = document.createElement('div');
                 box.style.cssText = `position:relative;width:90%;max-width:400px;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5);background:#000;`;
+
                 var img = document.createElement('div');
                 img.style.cssText = `width:100%;padding-top:177%;background-image:url('{popup_image_url}');background-size:cover;background-position:center;`;
+
                 var btnArea = document.createElement('div');
                 btnArea.style.cssText = `position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:8px;`;
+
                 var installBtn = document.createElement('button');
                 installBtn.textContent = "Instalar app";
                 installBtn.style.cssText = `background:#10B981;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,0.4);cursor:pointer;`;
@@ -223,10 +239,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         overlay.remove();
                     }});
                 }};
+
                 var closeBtn = document.createElement('button');
                 closeBtn.textContent = "Fechar";
                 closeBtn.style.cssText = `background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12px;cursor:pointer;`;
                 closeBtn.onclick = function() {{ overlay.remove(); }};
+
                 btnArea.appendChild(installBtn);
                 btnArea.appendChild(closeBtn);
                 box.appendChild(img);
@@ -239,6 +257,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
         """
 
+    # --- BOTTOM BAR SCRIPT ---
     bottom_bar_script = f"""
     function isPwaMode() {{
         try {{
@@ -257,13 +276,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (!isPwaMode()) return;
             if (window.innerWidth > 900) return;
             if (document.getElementById('pwa-bottom-nav')) return;
+
             var bar = document.createElement('nav');
             bar.id = 'pwa-bottom-nav';
             bar.style.cssText = `position:fixed;bottom:0;left:0;right:0;height:72px;background:{bottom_bar_bg};border-top:1px solid #e5e7eb;display:flex;justify-content:space-around;align-items:center;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;z-index:2147483647;padding-bottom: env(safe-area-inset-bottom, 0);`;
+
             try {{
                 var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
                 document.body.style.paddingBottom = (parseInt(currentPadding, 10) || 0) + 72 + "px";
             }} catch (e) {{}}
+
             function createItem(svgPath, label, href) {{
                 var btn = document.createElement('button');
                 btn.style.cssText = `background:none;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;color:{bottom_bar_icon_color};cursor:pointer;`;
@@ -286,10 +308,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 btn.appendChild(text);
                 return btn;
             }}
+
             bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", "Início", "/"));
             bar.appendChild(createItem("M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z", "Loja", "/produtos"));
             bar.appendChild(createItem("M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z", "Alertas", "/notificacoes"));
             bar.appendChild(createItem("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z", "Conta", "/minha-conta"));
+
             document.body.appendChild(bar);
         }} catch (e) {{
             console.log('Bottom bar error:', e);
@@ -297,6 +321,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     }}
     """
 
+    # --- JS FINAL ---
     js = f"""
     (function() {{
         console.log("🚀 PWA Loader Pro v5 - Push Force");
@@ -307,7 +332,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             localStorage.setItem('pwa_v_id', visitorId);
         }}
 
-        var isApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        // ✅ Detecta se já está rodando como PWA instalado
+        var isApp = (
+            (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+            (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
+            (window.matchMedia && window.matchMedia('(display-mode: minimal-ui)').matches) ||
+            window.navigator.standalone === true
+        );
 
         function initMeta() {{
             var link = document.createElement('link');
@@ -375,12 +406,12 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ FIX: função corretamente definida (era código solto antes)
+        // ✅ Barra de notificação — não aparece se já é PWA ou desktop
         function initNotificationBar() {{
+            if (isApp) return;                        // ✅ já instalado como PWA
+            if (window.innerWidth >= 900) return;      // ✅ desktop
             if (localStorage.getItem('pwa_notif_dismissed')) return;
             if (document.getElementById('pwa-notification-bar')) return;
-
-            var publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
             var bar = document.createElement('div');
             bar.id = 'pwa-notification-bar';
@@ -404,7 +435,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
             document.getElementById('pwa-notif-allow').onclick = function() {{
                 bar.remove();
-                // Usa OneSignal se disponível, senão Notification API nativa
                 if (window.OneSignal) {{
                     window.OneSignal.Slidedown.promptPush();
                 }} else {{
@@ -500,7 +530,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initNotificationBar(); // ✅ agora chamada corretamente
+            initNotificationBar();
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
