@@ -136,11 +136,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (isApp) return;
                 if (window.innerWidth >= 900) return;
                 if (document.getElementById('pwa-topbar-widget')) return;
-
                 var bar = document.createElement('div');
                 bar.id = 'pwa-topbar-widget';
                 bar.style.cssText = `position:fixed;{top_position_css}left:0;right:0;{background_style}color:{topbar_text_color};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:13px;z-index:2147483647;box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
-
                 try {{
                     var barHeight = 44;
                     if ("{topbar_position}" === "top") {{
@@ -151,7 +149,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         document.body.style.paddingBottom = (parseInt(currentBottom, 10) || 0) + barHeight + "px";
                     }}
                 }} catch (e) {{}}
-
                 var left = document.createElement('div');
                 left.style.cssText = "display:flex;align-items:center;gap:8px;";
                 var iconSpan = document.createElement('span');
@@ -162,7 +159,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 overlayText.style.flex = "1";
                 left.appendChild(iconSpan);
                 left.appendChild(overlayText);
-
                 var btn = document.createElement('button');
                 btn.textContent = "{safe_topbar_button_text}";
                 btn.style.cssText = `background:{topbar_button_bg_color};color:{topbar_button_text_color};border:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;`;
@@ -185,7 +181,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         showInstallHelpModal();
                     }}
                 }};
-
                 bar.appendChild(left);
                 bar.appendChild(btn);
                 document.body.appendChild(bar);
@@ -205,20 +200,15 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (window.innerWidth >= 900) return;
                 if (!window.deferredPrompt) return;
                 if (document.getElementById('pwa-install-popup')) return;
-
                 var overlay = document.createElement('div');
                 overlay.id = 'pwa-install-popup';
                 overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;`;
-
                 var box = document.createElement('div');
                 box.style.cssText = `position:relative;width:90%;max-width:400px;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5);background:#000;`;
-
                 var img = document.createElement('div');
                 img.style.cssText = `width:100%;padding-top:177%;background-image:url('{popup_image_url}');background-size:cover;background-position:center;`;
-
                 var btnArea = document.createElement('div');
                 btnArea.style.cssText = `position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:8px;`;
-
                 var installBtn = document.createElement('button');
                 installBtn.textContent = "Instalar app";
                 installBtn.style.cssText = `background:#10B981;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,0.4);cursor:pointer;`;
@@ -239,12 +229,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         overlay.remove();
                     }});
                 }};
-
                 var closeBtn = document.createElement('button');
                 closeBtn.textContent = "Fechar";
                 closeBtn.style.cssText = `background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12px;cursor:pointer;`;
                 closeBtn.onclick = function() {{ overlay.remove(); }};
-
                 btnArea.appendChild(installBtn);
                 btnArea.appendChild(closeBtn);
                 box.appendChild(img);
@@ -276,16 +264,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (!isPwaMode()) return;
             if (window.innerWidth > 900) return;
             if (document.getElementById('pwa-bottom-nav')) return;
-
             var bar = document.createElement('nav');
             bar.id = 'pwa-bottom-nav';
             bar.style.cssText = `position:fixed;bottom:0;left:0;right:0;height:72px;background:{bottom_bar_bg};border-top:1px solid #e5e7eb;display:flex;justify-content:space-around;align-items:center;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;z-index:2147483647;padding-bottom: env(safe-area-inset-bottom, 0);`;
-
             try {{
                 var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
                 document.body.style.paddingBottom = (parseInt(currentPadding, 10) || 0) + 72 + "px";
             }} catch (e) {{}}
-
             function createItem(svgPath, label, href) {{
                 var btn = document.createElement('button');
                 btn.style.cssText = `background:none;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;color:{bottom_bar_icon_color};cursor:pointer;`;
@@ -308,12 +293,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 btn.appendChild(text);
                 return btn;
             }}
-
             bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", "Início", "/"));
             bar.appendChild(createItem("M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z", "Loja", "/produtos"));
             bar.appendChild(createItem("M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z", "Alertas", "/notificacoes"));
             bar.appendChild(createItem("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z", "Conta", "/minha-conta"));
-
             document.body.appendChild(bar);
         }} catch (e) {{
             console.log('Bottom bar error:', e);
@@ -405,11 +388,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ OneSignal inicializado NA LOJA — só dentro do PWA instalado
+        // ✅ Inicializa OneSignal SDK na loja — apenas dentro do PWA
         function initOneSignalInApp() {{
             if (!isApp) return;
 
-            // Injeta SDK apenas uma vez
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
                 sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
@@ -425,14 +407,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     serviceWorkerPath: '/app-builder/sw.js',
                     serviceWorkerParam: {{ scope: '/' }},
                 }});
-                console.log('✅ OneSignal inicializado no PWA da loja');
+                console.log('✅ OneSignal inicializado no PWA');
             }});
         }}
 
-        // ✅ Barra de notificação — só dentro do PWA instalado
+        // ✅ Barra de notificação — apenas dentro do PWA, nunca repete
         function initNotificationBar() {{
             if (!isApp) return;
-            if (localStorage.getItem('pwa_notif_dismissed')) return;
+
+            // Já concedeu permissão — não precisa pedir de novo
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
+
+            // Já negou — não adianta insistir
+            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
+
+            // Já interagiu com a barra antes (aceitou ou fechou)
+            if (localStorage.getItem('pwa_notif_asked')) return;
+
             if (document.getElementById('pwa-notification-bar')) return;
 
             var bar = document.createElement('div');
@@ -456,25 +447,30 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             document.body.appendChild(bar);
 
             document.getElementById('pwa-notif-allow').onclick = function() {{
+                // ✅ Marca ANTES de pedir — evita reaparecer em caso de erro
+                localStorage.setItem('pwa_notif_asked', '1');
                 bar.remove();
-                // ✅ Aguarda o SDK do OneSignal carregar antes de pedir permissão
+
                 var tentativas = 0;
                 var tryPrompt = function() {{
                     tentativas++;
-                    if (window.OneSignal) {{
-                        window.OneSignal.Slidedown.promptPush();
+                    if (window.OneSignal && window.OneSignal.Notifications) {{
+                        // ✅ Aciona o prompt nativo do celular via OneSignal
+                        window.OneSignal.Notifications.requestPermission();
                     }} else if (tentativas < 20) {{
                         setTimeout(tryPrompt, 500);
                     }} else {{
-                        // fallback após 10s se OneSignal não carregar
-                        Notification.requestPermission();
+                        // Fallback após 10s
+                        if (typeof Notification !== 'undefined') {{
+                            Notification.requestPermission();
+                        }}
                     }}
                 }};
                 tryPrompt();
             }};
 
             document.getElementById('pwa-notif-close').onclick = function() {{
-                localStorage.setItem('pwa_notif_dismissed', '1');
+                localStorage.setItem('pwa_notif_asked', '1');
                 bar.remove();
             }};
         }}
@@ -562,8 +558,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initOneSignalInApp();  // ✅ inicializa SDK do OneSignal na loja (só se PWA)
-            initNotificationBar(); // ✅ mostra barra (só se PWA)
+            initOneSignalInApp();
+            initNotificationBar();
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
