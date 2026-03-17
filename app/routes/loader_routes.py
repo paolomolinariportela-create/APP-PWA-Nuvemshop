@@ -10,7 +10,7 @@ BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
 
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+
 
 
 @router.get("/loader.js", include_in_schema=False)
@@ -589,73 +589,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         const publicVapidKey = "{VAPID_PUBLIC_KEY}";
 
-        function urlBase64ToUint8Array(base64String) {{
-            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {{
-                outputArray[i] = rawData.charCodeAt(i);
-            }}
-            return outputArray;
-        }}
-
-        async function subscribePush() {{
-            console.log("PUSH: subscribePush() chamado (sem checar Notification.permission)");
-
-            if (!('serviceWorker' in navigator)) {{
-                console.log("PUSH: navegador não suporta serviceWorker");
-                return;
-            }}
-            if (!publicVapidKey) {{
-                console.log("PUSH: VAPID PUBLIC KEY vazia, abortando");
-                return;
-            }}
-
-            try {{
-                console.log("PUSH: registrando Service Worker via proxy...");
-                const registration = await navigator.serviceWorker.register(
-                    '/app-builder/sw.js',
-                    {{ scope: '/' }}
-                );
-                const readyReg = await navigator.serviceWorker.ready;
-                console.log("PUSH: Service Worker pronto. scope =", readyReg.scope);
-
-                console.log("PUSH: chamando pushManager.subscribe...");
-                const subscription = await registration.pushManager.subscribe({{
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                }});
-                console.log("PUSH: subscription criada", subscription);
-
-                console.log("PUSH: enviando inscrição para backend...");
-                const res = await fetch('{final_backend_url}/push/subscribe', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{
-                        subscription: subscription,
-                        store_id: '{store_id}',
-                        visitor_id: visitorId
-                    }})
-                }});
-                console.log("PUSH: resposta backend status =", res.status);
-                let txt = "";
-                try {{
-                    txt = await res.text();
-                }} catch (e) {{}}
-                console.log("PUSH: resposta backend body =", txt);
-            }} catch (err) {{
-                console.error("❌ Erro Push (subscribe ou fetch):", err);
-            }}
-        }}
-
-        function showNotificationTopBar() {{
-            if (!('Notification' in window)) return;
-            if (Notification.permission === 'granted') return;
-
-            var existingBar = document.getElementById('pwa-notification-bar');
-            if (existingBar) return;
-
+       
             var bar = document.createElement('div');
             bar.id = 'pwa-notification-bar';
             bar.style.cssText = `
@@ -697,9 +631,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }};
         }}
 
-        function initNotificationBar() {{
-            showNotificationTopBar();
-        }}
+       
 
         function showInstallHelpModal() {{
             var existing = document.getElementById('pwa-install-modal');
@@ -819,8 +751,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initNotificationBar();
-            subscribePush();
+           
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
