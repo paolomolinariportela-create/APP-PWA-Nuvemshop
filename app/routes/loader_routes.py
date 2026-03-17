@@ -133,8 +133,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         topbar_script = f"""
         function initTopbarWidget() {{
             try {{
-                if (isApp) return;                   // ✅ já instalado como PWA
-                if (window.innerWidth >= 900) return; // ✅ desktop
+                if (isApp) return;
+                if (window.innerWidth >= 900) return;
                 if (document.getElementById('pwa-topbar-widget')) return;
 
                 var bar = document.createElement('div');
@@ -201,8 +201,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         popup_script = f"""
         function initInstallPopup() {{
             try {{
-                if (isApp) return;                   // ✅ já instalado como PWA
-                if (window.innerWidth >= 900) return; // ✅ desktop
+                if (isApp) return;
+                if (window.innerWidth >= 900) return;
                 if (!window.deferredPrompt) return;
                 if (document.getElementById('pwa-install-popup')) return;
 
@@ -332,7 +332,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             localStorage.setItem('pwa_v_id', visitorId);
         }}
 
-        // ✅ Detecta se já está rodando como PWA instalado
         var isApp = (
             (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
             (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
@@ -406,10 +405,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Barra de notificação — não aparece se já é PWA ou desktop
+        // ✅ Barra de notificação — aparece SOMENTE dentro do PWA instalado
         function initNotificationBar() {{
-            if (isApp) return;                        // ✅ já instalado como PWA
-            if (window.innerWidth >= 900) return;      // ✅ desktop
+            if (!isApp) return;                       // ✅ só dentro do PWA
             if (localStorage.getItem('pwa_notif_dismissed')) return;
             if (document.getElementById('pwa-notification-bar')) return;
 
@@ -424,7 +422,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             bar.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span style="font-size:16px;">🔔</span>
-                  <span>Ative as notificações para receber atualizações de pedidos, cupons e novidades.</span>
+                  <span>Ative as notificações para receber cupons e novidades.</span>
                 </div>
                 <div style="display:flex;gap:8px;">
                   <button id="pwa-notif-allow" style="padding:6px 10px;border-radius:6px;border:none;background:#22C55E;color:#fff;font-weight:bold;font-size:12px;cursor:pointer;">Ativar</button>
