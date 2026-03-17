@@ -388,15 +388,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ OneSignal: inicializa e pede permissão nativa direto — sem barra customizada
+        // ✅ Inicializa OneSignal silenciosamente — sem pedir permissão ainda
         function initOneSignalInApp() {{
             if (!isApp) return;
-
-            // Já respondeu antes — não pede de novo
-            if (typeof Notification !== 'undefined' && Notification.permission !== 'default') return;
-
-            // Já perguntamos via nossa lógica
-            if (localStorage.getItem('pwa_notif_asked')) return;
 
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
@@ -413,14 +407,65 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     serviceWorkerPath: '/app-builder/sw.js',
                     serviceWorkerParam: {{ scope: '/' }},
                 }});
-
-                // ✅ Marca antes de pedir — evita loop
-                localStorage.setItem('pwa_notif_asked', '1');
-
-                // ✅ Prompt nativo do Android/Chrome direto
-                await OneSignal.Notifications.requestPermission();
-                console.log('✅ OneSignal prompt nativo exibido');
+                console.log('✅ OneSignal pronto');
             }});
+        }}
+
+        // ✅ Barra customizada — gatilho necessário para o prompt nativo funcionar
+        // Aparece só no PWA, só uma vez, só se nunca respondeu
+        function initNotificationBar() {{
+            if (!isApp) return;
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
+            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
+            if (localStorage.getItem('pwa_notif_asked')) return;
+            if (document.getElementById('pwa-notification-bar')) return;
+
+            var bar = document.createElement('div');
+            bar.id = 'pwa-notification-bar';
+            bar.style.cssText = `
+                position:fixed;bottom:80px;left:12px;right:12px;z-index:2147483647;
+                background:#111827;color:#F9FAFB;padding:12px 14px;
+                display:flex;align-items:center;justify-content:space-between;
+                font-family:sans-serif;font-size:13px;
+                box-shadow:0 4px 20px rgba(0,0,0,0.4);
+                border-radius:12px;
+            `;
+            bar.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;flex:1;">
+                  <span style="font-size:18px;">🔔</span>
+                  <span style="line-height:1.3;">Ative notificações e receba cupons exclusivos!</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-left:10px;">
+                  <button id="pwa-notif-allow" style="padding:7px 12px;border-radius:8px;border:none;background:#22C55E;color:#fff;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap;">Ativar</button>
+                  <button id="pwa-notif-close" style="padding:7px 8px;border-radius:8px;border:none;background:transparent;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;">✕</button>
+                </div>
+            `;
+            document.body.appendChild(bar);
+
+            document.getElementById('pwa-notif-allow').onclick = function() {{
+                // ✅ Salva ANTES — evita reaparecer mesmo se der erro
+                localStorage.setItem('pwa_notif_asked', '1');
+                bar.remove();
+
+                // ✅ Gesto confirmado — agora o prompt nativo pode aparecer
+                var tentativas = 0;
+                var tryPrompt = function() {{
+                    tentativas++;
+                    if (window.OneSignal && window.OneSignal.Notifications) {{
+                        window.OneSignal.Notifications.requestPermission();
+                    }} else if (tentativas < 20) {{
+                        setTimeout(tryPrompt, 500);
+                    }} else {{
+                        if (typeof Notification !== 'undefined') Notification.requestPermission();
+                    }}
+                }};
+                tryPrompt();
+            }};
+
+            document.getElementById('pwa-notif-close').onclick = function() {{
+                localStorage.setItem('pwa_notif_asked', '1');
+                bar.remove();
+            }};
         }}
 
         function showInstallHelpModal() {{
@@ -506,7 +551,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initOneSignalInApp(); // ✅ sem barra customizada — prompt nativo direto
+            initOneSignalInApp();   // ✅ SDK carrega silenciosamente
+            initNotificationBar();  // ✅ barra aparece como gatilho para o usuário
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
