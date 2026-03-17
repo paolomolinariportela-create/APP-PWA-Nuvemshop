@@ -1,4 +1,4 @@
-import os 
+import os
 from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -388,7 +388,62 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Inicializa OneSignal silenciosamente — sem pedir permissão ainda
+        // ✅ Barra de notificação — só aparece APÓS OneSignal estar pronto
+        // Sem fallback — garantia total que registra no OneSignal
+        function initNotificationBar() {{
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
+            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
+            if (localStorage.getItem('pwa_notif_asked')) return;
+            if (document.getElementById('pwa-notification-bar')) return;
+
+            // ✅ Delay de 3s para não assustar o usuário assim que abre o app
+            setTimeout(function() {{
+                if (document.getElementById('pwa-notification-bar')) return;
+
+                var bar = document.createElement('div');
+                bar.id = 'pwa-notification-bar';
+                bar.style.cssText = `
+                    position:fixed;bottom:80px;left:12px;right:12px;z-index:2147483647;
+                    background:#111827;color:#F9FAFB;padding:12px 14px;
+                    display:flex;align-items:center;justify-content:space-between;
+                    font-family:sans-serif;font-size:13px;
+                    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+                    border-radius:12px;
+                    animation: slideUp 0.4s ease-out;
+                `;
+                bar.innerHTML = `
+                    <style>
+                      @keyframes slideUp {{
+                        from {{ transform: translateY(30px); opacity: 0; }}
+                        to {{ transform: translateY(0); opacity: 1; }}
+                      }}
+                    </style>
+                    <div style="display:flex;align-items:center;gap:8px;flex:1;">
+                      <span style="font-size:18px;">🔔</span>
+                      <span style="line-height:1.3;">Ative notificações e receba cupons exclusivos!</span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-left:10px;">
+                      <button id="pwa-notif-allow" style="padding:7px 12px;border-radius:8px;border:none;background:#22C55E;color:#fff;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap;">Ativar</button>
+                      <button id="pwa-notif-close" style="padding:7px 8px;border-radius:8px;border:none;background:transparent;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;">✕</button>
+                    </div>
+                `;
+                document.body.appendChild(bar);
+
+                document.getElementById('pwa-notif-allow').onclick = function() {{
+                    localStorage.setItem('pwa_notif_asked', '1');
+                    bar.remove();
+                    // ✅ OneSignal JÁ está pronto — sem retry, sem fallback nativo
+                    window.OneSignal.Notifications.requestPermission();
+                }};
+
+                document.getElementById('pwa-notif-close').onclick = function() {{
+                    localStorage.setItem('pwa_notif_asked', '1');
+                    bar.remove();
+                }};
+            }}, 3000); // ✅ aparece 3s após o OneSignal estar pronto
+        }}
+
+        // ✅ OneSignal inicializa silenciosamente e só depois chama a barra
         function initOneSignalInApp() {{
             if (!isApp) return;
 
@@ -408,64 +463,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     serviceWorkerParam: {{ scope: '/' }},
                 }});
                 console.log('✅ OneSignal pronto');
+
+                // ✅ Só chama a barra DEPOIS que SDK está 100% pronto
+                initNotificationBar();
             }});
-        }}
-
-        // ✅ Barra customizada — gatilho necessário para o prompt nativo funcionar
-        // Aparece só no PWA, só uma vez, só se nunca respondeu
-        function initNotificationBar() {{
-            if (!isApp) return;
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
-            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
-            if (localStorage.getItem('pwa_notif_asked')) return;
-            if (document.getElementById('pwa-notification-bar')) return;
-
-            var bar = document.createElement('div');
-            bar.id = 'pwa-notification-bar';
-            bar.style.cssText = `
-                position:fixed;bottom:80px;left:12px;right:12px;z-index:2147483647;
-                background:#111827;color:#F9FAFB;padding:12px 14px;
-                display:flex;align-items:center;justify-content:space-between;
-                font-family:sans-serif;font-size:13px;
-                box-shadow:0 4px 20px rgba(0,0,0,0.4);
-                border-radius:12px;
-            `;
-            bar.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;flex:1;">
-                  <span style="font-size:18px;">🔔</span>
-                  <span style="line-height:1.3;">Ative notificações e receba cupons exclusivos!</span>
-                </div>
-                <div style="display:flex;gap:6px;margin-left:10px;">
-                  <button id="pwa-notif-allow" style="padding:7px 12px;border-radius:8px;border:none;background:#22C55E;color:#fff;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap;">Ativar</button>
-                  <button id="pwa-notif-close" style="padding:7px 8px;border-radius:8px;border:none;background:transparent;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;">✕</button>
-                </div>
-            `;
-            document.body.appendChild(bar);
-
-            document.getElementById('pwa-notif-allow').onclick = function() {{
-                // ✅ Salva ANTES — evita reaparecer mesmo se der erro
-                localStorage.setItem('pwa_notif_asked', '1');
-                bar.remove();
-
-                // ✅ Gesto confirmado — agora o prompt nativo pode aparecer
-                var tentativas = 0;
-                var tryPrompt = function() {{
-                    tentativas++;
-                    if (window.OneSignal && window.OneSignal.Notifications) {{
-                        window.OneSignal.Notifications.requestPermission();
-                    }} else if (tentativas < 20) {{
-                        setTimeout(tryPrompt, 500);
-                    }} else {{
-                        if (typeof Notification !== 'undefined') Notification.requestPermission();
-                    }}
-                }};
-                tryPrompt();
-            }};
-
-            document.getElementById('pwa-notif-close').onclick = function() {{
-                localStorage.setItem('pwa_notif_asked', '1');
-                bar.remove();
-            }};
         }}
 
         function showInstallHelpModal() {{
@@ -551,12 +552,27 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initOneSignalInApp();   // ✅ SDK carrega silenciosamente
-            initNotificationBar();  // ✅ barra aparece como gatilho para o usuário
+            initOneSignalInApp(); // ✅ SDK carrega → chama initNotificationBar() internamente
         }} catch (e) {{
             console.log('Critical block error:', e);
         }}
 
+        // ✅ Bottom bar aparece imediatamente — sem delay
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', function() {{
+                try {{
+                    {bottom_bar_script}
+                    if (typeof initBottomBar === 'function') initBottomBar();
+                }} catch (e) {{ console.log('Bottom bar init error:', e); }}
+            }});
+        }} else {{
+            try {{
+                {bottom_bar_script}
+                if (typeof initBottomBar === 'function') initBottomBar();
+            }} catch (e) {{ console.log('Bottom bar init error:', e); }}
+        }}
+
+        // ✅ FAB, Topbar e Popup com delay de 800ms (só fora do PWA)
         setTimeout(function() {{
             try {{
                 {fab_script}
@@ -572,19 +588,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}
         }}, 800);
 
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', function() {{
-                try {{
-                    {bottom_bar_script}
-                    if (typeof initBottomBar === 'function') initBottomBar();
-                }} catch (e) {{ console.log('Bottom bar init error:', e); }}
-            }});
-        }} else {{
-            try {{
-                {bottom_bar_script}
-                if (typeof initBottomBar === 'function') initBottomBar();
-            }} catch (e) {{ console.log('Bottom bar init error:', e); }}
-        }}
     }})();
     """
 
