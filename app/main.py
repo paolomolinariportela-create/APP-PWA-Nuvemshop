@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
 
 from app.database import engine, Base
 
@@ -187,7 +188,6 @@ app.add_middleware(
 )
 
 # Routers principais
-# (sw_router removido, sw.js agora é servido pelo front/OneSignal)
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(loader_routes.router, tags=["Loader"])
@@ -201,7 +201,18 @@ def health_check():
     return {"status": "Online 🚀", "service": "App Builder Pro - Modular API"}
 
 
-# Frontend estático
+# ✅ Service Worker para OneSignal (DEVE ficar antes do mount do frontend)
+@app.get("/sw.js", tags=["PWA"])
+def serve_service_worker():
+    content = 'importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");'
+    return Response(
+        content=content,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
+
+
+# Frontend estático (SEMPRE por último)
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
