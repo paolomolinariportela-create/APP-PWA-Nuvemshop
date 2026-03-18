@@ -35,7 +35,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     fab_delay = getattr(config, "fab_delay", 0) or 0
     fab_color = getattr(config, "fab_color", "#2563EB") if config else "#2563EB"
     fab_size = getattr(config, "fab_size", "medium") if config else "medium"
-    fab_background_image_url = getattr(config, "fab_background_image_url", "") or ""
 
     if fab_size == "xs":
         fab_width, fab_height = 54, 46
@@ -65,7 +64,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     popup_enabled = bool(getattr(config, "popup_enabled", False)) if config else False
     popup_image_url = getattr(config, "popup_image_url", "") or ""
 
-    # --- FAB SCRIPT ---
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -75,7 +73,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             setTimeout(function() {{
                 var fab = document.createElement('div');
                 fab.id = 'pwa-fab-btn';
-                fab.style.cssText = "position:fixed; bottom:{offset_px}px; {position_css} background:{fab_color}; color:white; width:{fab_width}px; height:{fab_height}px; border-radius:9999px; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:2147483647; font-family:sans-serif; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition: all 0.3s ease; padding:0 22px;";
+                fab.style.cssText = "position:fixed;bottom:{offset_px}px;{position_css}background:{fab_color};color:white;width:{fab_width}px;height:{fab_height}px;border-radius:9999px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:2147483647;font-family:sans-serif;font-weight:bold;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;padding:0 22px;";
                 var iconSpan = document.createElement('span');
                 iconSpan.style.fontSize = "20px";
                 iconSpan.textContent = "{fab_icon}";
@@ -87,39 +85,22 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 fab.onclick = function() {{
                     if (window.deferredPrompt) {{
                         window.deferredPrompt.prompt();
-                        window.deferredPrompt.userChoice.then(function(choiceResult) {{
-                            if (choiceResult.outcome === 'accepted') {{
+                        window.deferredPrompt.userChoice.then(function(r) {{
+                            if (r.outcome === 'accepted') {{
                                 fab.style.display = 'none';
-                                try {{
-                                    fetch('{final_backend_url}/analytics/install', {{
-                                        method: 'POST',
-                                        headers: {{ 'Content-Type': 'application/json' }},
-                                        body: JSON.stringify({{ store_id: '{store_id}', visitor_id: visitorId }})
-                                    }});
-                                }} catch (e) {{}}
+                                try {{ fetch('{final_backend_url}/analytics/install', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{store_id:'{store_id}',visitor_id:visitorId}}) }}); }} catch(e) {{}}
                             }}
                             window.deferredPrompt = null;
                         }});
-                    }} else {{
-                        showInstallHelpModal();
-                    }}
+                    }} else {{ showInstallHelpModal(); }}
                 }};
-                fab.animate(
-                    [{{ transform: 'translateY(100px)', opacity: 0 }}, {{ transform: 'translateY(0)', opacity: 1 }}],
-                    {{ duration: 500, easing: 'ease-out' }}
-                );
+                fab.animate([{{transform:'translateY(100px)',opacity:0}},{{transform:'translateY(0)',opacity:1}}],{{duration:500,easing:'ease-out'}});
                 document.body.appendChild(fab);
-                setInterval(function() {{
-                    fab.animate(
-                        [{{ transform: 'scale(1)' }}, {{ transform: 'scale(1.05)' }}, {{ transform: 'scale(1)' }}],
-                        {{ duration: 1000 }}
-                    );
-                }}, 5000);
+                setInterval(function() {{ fab.animate([{{transform:'scale(1)'}},{{transform:'scale(1.05)'}},{{transform:'scale(1)'}}],{{duration:1000}}); }}, 5000);
             }}, {fab_delay * 1000});
         }}
         """
 
-    # --- TOPBAR SCRIPT ---
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
@@ -127,8 +108,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\"')
         background_style = (
             f"background-image:url('{topbar_background_image_url}');background-size:cover;background-position:center;"
-            if topbar_background_image_url
-            else f"background:{topbar_color};"
+            if topbar_background_image_url else f"background:{topbar_color};"
         )
         topbar_script = f"""
         function initTopbarWidget() {{
@@ -142,13 +122,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 try {{
                     var barHeight = 44;
                     if ("{topbar_position}" === "top") {{
-                        var currentTop = window.getComputedStyle(document.body).paddingTop || "0px";
-                        document.body.style.paddingTop = (parseInt(currentTop, 10) || 0) + barHeight + "px";
+                        var ct = window.getComputedStyle(document.body).paddingTop || "0px";
+                        document.body.style.paddingTop = (parseInt(ct,10)||0) + barHeight + "px";
                     }} else {{
-                        var currentBottom = window.getComputedStyle(document.body).paddingBottom || "0px";
-                        document.body.style.paddingBottom = (parseInt(currentBottom, 10) || 0) + barHeight + "px";
+                        var cb = window.getComputedStyle(document.body).paddingBottom || "0px";
+                        document.body.style.paddingBottom = (parseInt(cb,10)||0) + barHeight + "px";
                     }}
-                }} catch (e) {{}}
+                }} catch(e) {{}}
                 var left = document.createElement('div');
                 left.style.cssText = "display:flex;align-items:center;gap:8px;";
                 var iconSpan = document.createElement('span');
@@ -165,32 +145,21 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 btn.onclick = function() {{
                     if (window.deferredPrompt) {{
                         window.deferredPrompt.prompt();
-                        window.deferredPrompt.userChoice.then(function(choiceResult) {{
-                            if (choiceResult.outcome === 'accepted') {{
-                                try {{
-                                    fetch('{final_backend_url}/analytics/install', {{
-                                        method: 'POST',
-                                        headers: {{ 'Content-Type': 'application/json' }},
-                                        body: JSON.stringify({{ store_id: '{store_id}', visitor_id: visitorId }})
-                                    }});
-                                }} catch (e) {{}}
+                        window.deferredPrompt.userChoice.then(function(r) {{
+                            if (r.outcome === 'accepted') {{
+                                try {{ fetch('{final_backend_url}/analytics/install', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{store_id:'{store_id}',visitor_id:visitorId}}) }}); }} catch(e) {{}}
                             }}
                             window.deferredPrompt = null;
                         }});
-                    }} else {{
-                        showInstallHelpModal();
-                    }}
+                    }} else {{ showInstallHelpModal(); }}
                 }};
                 bar.appendChild(left);
                 bar.appendChild(btn);
                 document.body.appendChild(bar);
-            }} catch (e) {{
-                console.log("Topbar widget error:", e);
-            }}
+            }} catch(e) {{ console.log("Topbar widget error:", e); }}
         }}
         """
 
-    # --- POPUP SCRIPT ---
     popup_script = ""
     if popup_enabled and popup_image_url:
         popup_script = f"""
@@ -211,19 +180,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 btnArea.style.cssText = `position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:8px;`;
                 var installBtn = document.createElement('button');
                 installBtn.textContent = "Instalar app";
-                installBtn.style.cssText = `background:#10B981;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,0.4);cursor:pointer;`;
+                installBtn.style.cssText = `background:#10B981;color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;`;
                 installBtn.onclick = function() {{
                     if (!window.deferredPrompt) {{ overlay.remove(); return; }}
                     window.deferredPrompt.prompt();
-                    window.deferredPrompt.userChoice.then(function(choiceResult) {{
-                        if (choiceResult.outcome === 'accepted') {{
-                            try {{
-                                fetch('{final_backend_url}/analytics/install', {{
-                                    method: 'POST',
-                                    headers: {{ 'Content-Type': 'application/json' }},
-                                    body: JSON.stringify({{ store_id: '{store_id}', visitor_id: visitorId }})
-                                }});
-                            }} catch (e) {{}}
+                    window.deferredPrompt.userChoice.then(function(r) {{
+                        if (r.outcome === 'accepted') {{
+                            try {{ fetch('{final_backend_url}/analytics/install', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{store_id:'{store_id}',visitor_id:visitorId}}) }}); }} catch(e) {{}}
                         }}
                         window.deferredPrompt = null;
                         overlay.remove();
@@ -239,13 +202,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 box.appendChild(btnArea);
                 overlay.appendChild(box);
                 document.body.appendChild(overlay);
-            }} catch (e) {{
-                console.log("Popup install error:", e);
-            }}
+            }} catch(e) {{ console.log("Popup install error:", e); }}
         }}
         """
 
-    # --- BOTTOM BAR SCRIPT ---
     bottom_bar_script = f"""
     function isPwaMode() {{
         try {{
@@ -255,7 +215,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
             }}
             if (window.navigator.standalone === true) return true;
-        }} catch (e) {{}}
+        }} catch(e) {{}}
         return false;
     }}
 
@@ -266,52 +226,49 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (document.getElementById('pwa-bottom-nav')) return;
             var bar = document.createElement('nav');
             bar.id = 'pwa-bottom-nav';
-            bar.style.cssText = `position:fixed;bottom:0;left:0;right:0;height:72px;background:{bottom_bar_bg};border-top:1px solid #e5e7eb;display:flex;justify-content:space-around;align-items:center;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;z-index:2147483647;padding-bottom: env(safe-area-inset-bottom, 0);`;
+            bar.style.cssText = `position:fixed;bottom:0;left:0;right:0;height:72px;background:{bottom_bar_bg};border-top:1px solid #e5e7eb;display:flex;justify-content:space-around;align-items:center;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;z-index:2147483647;padding-bottom:env(safe-area-inset-bottom,0);`;
             try {{
-                var currentPadding = window.getComputedStyle(document.body).paddingBottom || "0px";
-                document.body.style.paddingBottom = (parseInt(currentPadding, 10) || 0) + 72 + "px";
-            }} catch (e) {{}}
+                var cp = window.getComputedStyle(document.body).paddingBottom || "0px";
+                document.body.style.paddingBottom = (parseInt(cp,10)||0) + 72 + "px";
+            }} catch(e) {{}}
             function createItem(svgPath, label, href) {{
                 var btn = document.createElement('button');
-                btn.style.cssText = `background:none;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;color:{bottom_bar_icon_color};cursor:pointer;`;
-                btn.onclick = function() {{ try {{ if (href) window.location.href = href; }} catch (e) {{}} }};
-                var iconWrapper = document.createElement('div');
-                iconWrapper.style.cssText = `width:28px;height:28px;display:flex;align-items:center;justify-content:center;`;
-                var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                svg.setAttribute('viewBox', '0 0 24 24');
-                svg.setAttribute('width', '28');
-                svg.setAttribute('height', '28');
+                btn.style.cssText = `background:none;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:{bottom_bar_icon_color};cursor:pointer;`;
+                btn.onclick = function() {{ try {{ if (href) window.location.href = href; }} catch(e) {{}} }};
+                var iw = document.createElement('div');
+                iw.style.cssText = `width:28px;height:28px;display:flex;align-items:center;justify-content:center;`;
+                var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+                svg.setAttribute('viewBox','0 0 24 24');
+                svg.setAttribute('width','28');
+                svg.setAttribute('height','28');
                 svg.style.fill = 'currentColor';
-                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                var path = document.createElementNS('http://www.w3.org/2000/svg','path');
                 path.setAttribute('d', svgPath);
                 svg.appendChild(path);
-                iconWrapper.appendChild(svg);
+                iw.appendChild(svg);
                 var text = document.createElement('span');
                 text.textContent = label;
                 text.style.cssText = 'font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;';
-                btn.appendChild(iconWrapper);
+                btn.appendChild(iw);
                 btn.appendChild(text);
                 return btn;
             }}
-            bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", "Início", "/"));
-            bar.appendChild(createItem("M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z", "Loja", "/produtos"));
-            bar.appendChild(createItem("M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z", "Alertas", "/notificacoes"));
-            bar.appendChild(createItem("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z", "Conta", "/minha-conta"));
+            bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z","Início","/"));
+            bar.appendChild(createItem("M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z","Loja","/produtos"));
+            bar.appendChild(createItem("M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z","Alertas","/notificacoes"));
+            bar.appendChild(createItem("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z","Conta","/minha-conta"));
             document.body.appendChild(bar);
-        }} catch (e) {{
-            console.log('Bottom bar error:', e);
-        }}
+        }} catch(e) {{ console.log('Bottom bar error:', e); }}
     }}
     """
 
-    # --- JS FINAL ---
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader Pro v5 - Push Force");
+        console.log("🚀 PWA Loader Pro v6");
 
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
-            visitorId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+            visitorId = 'v_' + Math.random().toString(36).substr(2,9) + Date.now().toString(36);
             localStorage.setItem('pwa_v_id', visitorId);
         }}
 
@@ -321,6 +278,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             (window.matchMedia && window.matchMedia('(display-mode: minimal-ui)').matches) ||
             window.navigator.standalone === true
         );
+
+        // ✅ LOG DE DIAGNÓSTICO — remove após confirmar funcionamento
+        console.log('[PWA] isApp:', isApp);
+        console.log('[PWA] Notification.permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A');
+        console.log('[PWA] pwa_notif_asked:', localStorage.getItem('pwa_notif_asked'));
 
         function initMeta() {{
             var link = document.createElement('link');
@@ -334,36 +296,15 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         function buildVisitPayload() {{
-            var payload = {{
-                store_id: '{store_id}',
-                pagina: window.location.pathname,
-                is_pwa: isApp,
-                visitor_id: visitorId
-            }};
-            try {{ if (window.LS && LS.store) payload.store_ls_id = LS.store.id; }} catch (e) {{}}
-            try {{
-                if (window.LS && LS.product) {{
-                    payload.product_id = LS.product.id;
-                    if (LS.product.name) payload.product_name = LS.product.name;
-                }}
-            }} catch (e) {{}}
-            try {{
-                if (window.LS && LS.cart) {{
-                    if (typeof LS.cart.subtotal !== 'undefined') payload.cart_total = LS.cart.subtotal;
-                    if (Array.isArray(LS.cart.items)) payload.cart_items_count = LS.cart.items.length;
-                }}
-            }} catch (e) {{}}
+            var payload = {{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }};
+            try {{ if (window.LS && LS.store) payload.store_ls_id = LS.store.id; }} catch(e) {{}}
+            try {{ if (window.LS && LS.product) {{ payload.product_id = LS.product.id; if (LS.product.name) payload.product_name = LS.product.name; }} }} catch(e) {{}}
+            try {{ if (window.LS && LS.cart) {{ if (typeof LS.cart.subtotal !== 'undefined') payload.cart_total = LS.cart.subtotal; if (Array.isArray(LS.cart.items)) payload.cart_items_count = LS.cart.items.length; }} }} catch(e) {{}}
             return payload;
         }}
 
         function trackVisit() {{
-            try {{
-                fetch('{final_backend_url}/analytics/visita', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify(buildVisitPayload())
-                }});
-            }} catch (e) {{ console.error('Erro Analytics:', e); }}
+            try {{ fetch('{final_backend_url}/analytics/visita', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(buildVisitPayload()) }}); }} catch(e) {{ console.error('Erro Analytics:', e); }}
         }}
 
         function initAnalytics() {{
@@ -371,12 +312,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             try {{
                 var oldHref = document.location.href;
                 new MutationObserver(function() {{
-                    if (oldHref !== document.location.href) {{
-                        oldHref = document.location.href;
-                        trackVisit();
-                    }}
-                }}).observe(document.querySelector('body'), {{ childList: true, subtree: true }});
-            }} catch (e) {{}}
+                    if (oldHref !== document.location.href) {{ oldHref = document.location.href; trackVisit(); }}
+                }}).observe(document.querySelector('body'), {{ childList:true, subtree:true }});
+            }} catch(e) {{}}
         }}
 
         function initInstallCapture() {{
@@ -388,15 +326,24 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Barra de notificação — só aparece APÓS OneSignal estar pronto
-        // Sem fallback — garantia total que registra no OneSignal
+        // ✅ Barra de notificação — chamada APÓS OneSignal estar pronto
         function initNotificationBar() {{
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
-            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return;
-            if (localStorage.getItem('pwa_notif_asked')) return;
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {{
+                console.log('[PWA] Notificação já concedida — barra não exibida');
+                return;
+            }}
+            if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {{
+                console.log('[PWA] Notificação negada — barra não exibida');
+                return;
+            }}
+            if (localStorage.getItem('pwa_notif_asked')) {{
+                console.log('[PWA] pwa_notif_asked já definido — barra não exibida');
+                return;
+            }}
             if (document.getElementById('pwa-notification-bar')) return;
 
-            // ✅ Delay de 3s para não assustar o usuário assim que abre o app
+            console.log('[PWA] Exibindo barra de notificação em 3s...');
+
             setTimeout(function() {{
                 if (document.getElementById('pwa-notification-bar')) return;
 
@@ -407,17 +354,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     background:#111827;color:#F9FAFB;padding:12px 14px;
                     display:flex;align-items:center;justify-content:space-between;
                     font-family:sans-serif;font-size:13px;
-                    box-shadow:0 4px 20px rgba(0,0,0,0.4);
-                    border-radius:12px;
-                    animation: slideUp 0.4s ease-out;
+                    box-shadow:0 4px 20px rgba(0,0,0,0.4);border-radius:12px;
+                    animation:pwaBannerUp 0.4s ease-out;
                 `;
                 bar.innerHTML = `
-                    <style>
-                      @keyframes slideUp {{
-                        from {{ transform: translateY(30px); opacity: 0; }}
-                        to {{ transform: translateY(0); opacity: 1; }}
-                      }}
-                    </style>
+                    <style>@keyframes pwaBannerUp{{from{{transform:translateY(30px);opacity:0}}to{{transform:translateY(0);opacity:1}}}}</style>
                     <div style="display:flex;align-items:center;gap:8px;flex:1;">
                       <span style="font-size:18px;">🔔</span>
                       <span style="line-height:1.3;">Ative notificações e receba cupons exclusivos!</span>
@@ -428,22 +369,25 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     </div>
                 `;
                 document.body.appendChild(bar);
+                console.log('[PWA] Barra de notificação exibida');
 
                 document.getElementById('pwa-notif-allow').onclick = function() {{
                     localStorage.setItem('pwa_notif_asked', '1');
                     bar.remove();
-                    // ✅ OneSignal JÁ está pronto — sem retry, sem fallback nativo
-                    window.OneSignal.Notifications.requestPermission();
+                    // ✅ OneSignal JÁ pronto aqui — prompt nativo do Android
+                    window.OneSignal.Notifications.requestPermission().then(function(granted) {{
+                        console.log('[PWA] Permissão:', granted ? 'concedida' : 'negada');
+                    }});
                 }};
 
                 document.getElementById('pwa-notif-close').onclick = function() {{
                     localStorage.setItem('pwa_notif_asked', '1');
                     bar.remove();
                 }};
-            }}, 3000); // ✅ aparece 3s após o OneSignal estar pronto
+            }}, 3000);
         }}
 
-        // ✅ OneSignal inicializa silenciosamente e só depois chama a barra
+        // ✅ OneSignal inicializa silenciosamente e chama barra só quando pronto
         function initOneSignalInApp() {{
             if (!isApp) return;
 
@@ -462,9 +406,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     serviceWorkerPath: '/app-builder/sw.js',
                     serviceWorkerParam: {{ scope: '/' }},
                 }});
-                console.log('✅ OneSignal pronto');
-
-                // ✅ Só chama a barra DEPOIS que SDK está 100% pronto
+                console.log('[PWA] ✅ OneSignal pronto');
+                // ✅ Só chama barra DEPOIS do SDK estar 100% pronto
                 initNotificationBar();
             }});
         }}
@@ -475,21 +418,18 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             var ua = navigator.userAgent || "";
             var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
             var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
-            var steps = "";
-            if (isSamsung) {{
-                steps = "1. Toque no menu (⋮) ou ícone de opções.\\n2. Escolha Adicionar página a, depois Tela inicial.\\n3. Confirme o nome do app e toque em Adicionar.";
-            }} else if (isSafari) {{
-                steps = "1. Toque no ícone de compartilhar (quadrado com seta).\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme o nome do app e toque em Adicionar.";
-            }} else {{
-                steps = "1. Abra o menu do navegador.\\n2. Procure a opção Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar o app no seu celular.";
-            }}
+            var steps = isSamsung
+                ? "1. Toque no menu (⋮).\\n2. Escolha Adicionar à Tela inicial.\\n3. Confirme e toque em Adicionar."
+                : isSafari
+                ? "1. Toque no ícone de compartilhar.\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme e toque em Adicionar."
+                : "1. Abra o menu do navegador.\\n2. Toque em Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar.";
             var modal = document.createElement('div');
             modal.id = 'pwa-install-modal';
             modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2147483648;display:flex;align-items:center;justify-content:center;";
             var box = document.createElement('div');
-            box.style.cssText = "background:#ffffff;max-width:90%;border-radius:12px;padding:20px;font-family:sans-serif;color:#222;box-shadow:0 8px 30px rgba(0,0,0,0.25);";
+            box.style.cssText = "background:#fff;max-width:90%;border-radius:12px;padding:20px;font-family:sans-serif;color:#222;box-shadow:0 8px 30px rgba(0,0,0,0.25);";
             box.innerHTML = "<div style='font-size:18px;font-weight:bold;margin-bottom:8px;'>Instalar aplicativo</div>" +
-                            "<div style='font-size:14px;line-height:1.5;margin-bottom:12px;'>Siga os passos abaixo para instalar o app na tela inicial do seu celular:</div>" +
+                            "<div style='font-size:14px;line-height:1.5;margin-bottom:12px;'>Siga os passos para instalar na tela inicial:</div>" +
                             "<pre style='white-space:pre-wrap;font-size:13px;background:#f5f5f5;padding:10px;border-radius:8px;'>" + steps + "</pre>" +
                             "<button id='pwa-install-modal-close' style='margin-top:14px;width:100%;padding:10px 0;border:none;border-radius:8px;background:{color};color:#fff;font-weight:bold;font-size:14px;cursor:pointer;'>Entendi</button>";
             modal.appendChild(box);
@@ -503,26 +443,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     LS.registerOnChangeVariant(function(variant) {{
                         try {{
                             var productId = null, productName = null;
-                            try {{ if (LS.product) {{ productId = LS.product.id || null; productName = LS.product.name || null; }} }} catch (e) {{}}
-                            var payload = {{
-                                store_id: '{store_id}',
-                                visitor_id: visitorId,
-                                product_id: productId ? String(productId) : '',
-                                variant_id: variant && variant.id ? String(variant.id) : '',
-                                variant_name: variant && variant.name ? String(variant.name) : productName || null,
-                                price: variant && typeof variant.price !== 'undefined' ? String(variant.price) : null,
-                                stock: variant && typeof variant.stock !== 'undefined' ? variant.stock : null
-                            }};
+                            try {{ if (LS.product) {{ productId = LS.product.id||null; productName = LS.product.name||null; }} }} catch(e) {{}}
+                            var payload = {{ store_id:'{store_id}', visitor_id:visitorId, product_id:productId?String(productId):'', variant_id:variant&&variant.id?String(variant.id):'', variant_name:variant&&variant.name?String(variant.name):productName||null, price:variant&&typeof variant.price!=='undefined'?String(variant.price):null, stock:variant&&typeof variant.stock!=='undefined'?variant.stock:null }};
                             if (!payload.variant_id) return;
-                            fetch('{final_backend_url}/analytics/variant', {{
-                                method: 'POST',
-                                headers: {{ 'Content-Type': 'application/json' }},
-                                body: JSON.stringify(payload)
-                            }});
-                        }} catch (err) {{ console.log('Variant event error:', err); }}
+                            fetch('{final_backend_url}/analytics/variant', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload) }});
+                        }} catch(err) {{ console.log('Variant event error:', err); }}
                     }});
                 }}
-            }} catch (e) {{}}
+            }} catch(e) {{}}
         }}
 
         function initSalesTracking() {{
@@ -537,42 +465,32 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }}
                     var oid = window.location.href.split('/').pop();
                     if (!localStorage.getItem('venda_' + oid) && parseFloat(val) > 0) {{
-                        fetch('{final_backend_url}/analytics/venda', {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/json' }},
-                            body: JSON.stringify({{ store_id: '{store_id}', valor: val.toString(), visitor_id: visitorId }})
-                        }});
+                        fetch('{final_backend_url}/analytics/venda', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{store_id:'{store_id}',valor:val.toString(),visitor_id:visitorId}}) }});
                         localStorage.setItem('venda_' + oid, 'true');
                     }}
                 }}
-            }} catch (e) {{ console.log('Venda tracking error:', e); }}
+            }} catch(e) {{ console.log('Venda tracking error:', e); }}
         }}
 
         try {{
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initOneSignalInApp(); // ✅ SDK carrega → chama initNotificationBar() internamente
-        }} catch (e) {{
+            initOneSignalInApp(); // ✅ SDK carrega → chama initNotificationBar() quando pronto
+        }} catch(e) {{
             console.log('Critical block error:', e);
         }}
 
-        // ✅ Bottom bar aparece imediatamente — sem delay
+        // ✅ Bottom bar aparece imediatamente
         if (document.readyState === 'loading') {{
             document.addEventListener('DOMContentLoaded', function() {{
-                try {{
-                    {bottom_bar_script}
-                    if (typeof initBottomBar === 'function') initBottomBar();
-                }} catch (e) {{ console.log('Bottom bar init error:', e); }}
+                try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{ console.log('Bottom bar init error:', e); }}
             }});
         }} else {{
-            try {{
-                {bottom_bar_script}
-                if (typeof initBottomBar === 'function') initBottomBar();
-            }} catch (e) {{ console.log('Bottom bar init error:', e); }}
+            try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{ console.log('Bottom bar init error:', e); }}
         }}
 
-        // ✅ FAB, Topbar e Popup com delay de 800ms (só fora do PWA)
+        // ✅ FAB, Topbar e Popup — só fora do PWA
         setTimeout(function() {{
             try {{
                 {fab_script}
@@ -583,9 +501,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (typeof initInstallPopup === 'function') initInstallPopup();
                 initVariantTracking();
                 initSalesTracking();
-            }} catch (e) {{
-                console.log('Deferred block error:', e);
-            }}
+            }} catch(e) {{ console.log('Deferred block error:', e); }}
         }}, 800);
 
     }})();
