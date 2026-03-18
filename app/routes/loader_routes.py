@@ -279,8 +279,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         );
 
         // =============================================
-        // ✅ LOGGER VISUAL — mostra logs na tela do celular
-        // ⚠️ Remover após confirmar funcionamento
+        // ✅ LOGGER VISUAL — remove após confirmar funcionamento
         // =============================================
         var logBox = null;
         if (isApp) {{
@@ -292,16 +291,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 font-family:monospace;font-size:11px;padding:8px 10px;
                 max-height:220px;overflow-y:auto;
             `;
-            // Botão fechar o logger
             var closeLog = document.createElement('button');
             closeLog.textContent = '✕ fechar log';
             closeLog.style.cssText = 'display:block;margin-bottom:6px;background:#333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;';
             closeLog.onclick = function() {{ logBox.remove(); }};
             logBox.appendChild(closeLog);
-            document.addEventListener('DOMContentLoaded', function() {{
+            if (document.body) {{
                 document.body.appendChild(logBox);
-            }});
-            if (document.body) document.body.appendChild(logBox);
+            }} else {{
+                document.addEventListener('DOMContentLoaded', function() {{ document.body.appendChild(logBox); }});
+            }}
         }}
 
         function pwaLog(msg) {{
@@ -427,32 +426,45 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}, 3000);
         }}
 
-        // ✅ OneSignal inicializa e chama barra somente quando SDK pronto
+        // ✅ CORREÇÃO PRINCIPAL — sem defer + onload + try/catch no init
         function initOneSignalInApp() {{
             if (!isApp) {{
                 pwaLog('initOneSignalInApp ignorado: não é PWA');
                 return;
             }}
 
+            // ✅ Define o array ANTES de injetar o script
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+
+            window.OneSignalDeferred.push(async function(OneSignal) {{
+                try {{
+                    pwaLog('OneSignal callback disparado');
+                    window.OneSignal = OneSignal;
+                    await OneSignal.init({{
+                        appId: '91487f5b-2269-4d8a-8001-e9bb8b76bb38',
+                        serviceWorkerPath: '/app-builder/sw.js',
+                        serviceWorkerParam: {{ scope: '/' }},
+                    }});
+                    pwaLog('✅ OneSignal.init() concluído');
+                    initNotificationBar();
+                }} catch(err) {{
+                    pwaLog('❌ Erro no OneSignal.init(): ' + err.message);
+                }}
+            }});
+
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
                 sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-                sdkScript.defer = true;
+                // ✅ SEM defer — carrega imediatamente e dispara o callback
+                sdkScript.onload = function() {{
+                    pwaLog('✅ SDK script carregado (onload)');
+                }};
+                sdkScript.onerror = function() {{
+                    pwaLog('❌ ERRO ao carregar SDK — verifique conexão ou bloqueador');
+                }};
                 document.head.appendChild(sdkScript);
-                pwaLog('SDK OneSignal injetado');
+                pwaLog('SDK OneSignal injetado (sem defer)');
             }}
-
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            window.OneSignalDeferred.push(async function(OneSignal) {{
-                window.OneSignal = OneSignal;
-                await OneSignal.init({{
-                    appId: '91487f5b-2269-4d8a-8001-e9bb8b76bb38',
-                    serviceWorkerPath: '/app-builder/sw.js',
-                    serviceWorkerParam: {{ scope: '/' }},
-                }});
-                pwaLog('✅ OneSignal.init() concluído');
-                initNotificationBar();
-            }});
         }}
 
         function showInstallHelpModal() {{
