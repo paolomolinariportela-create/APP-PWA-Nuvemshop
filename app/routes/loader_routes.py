@@ -264,7 +264,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     js = f"""
     (function() {{
-        console.log("🚀 PWA Loader Pro v6");
 
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
@@ -279,10 +278,47 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             window.navigator.standalone === true
         );
 
-        // ✅ LOG DE DIAGNÓSTICO — remove após confirmar funcionamento
-        console.log('[PWA] isApp:', isApp);
-        console.log('[PWA] Notification.permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A');
-        console.log('[PWA] pwa_notif_asked:', localStorage.getItem('pwa_notif_asked'));
+        // =============================================
+        // ✅ LOGGER VISUAL — mostra logs na tela do celular
+        // ⚠️ Remover após confirmar funcionamento
+        // =============================================
+        var logBox = null;
+        if (isApp) {{
+            logBox = document.createElement('div');
+            logBox.id = 'pwa-debug-log';
+            logBox.style.cssText = `
+                position:fixed;top:0;left:0;right:0;z-index:2147483647;
+                background:rgba(0,0,0,0.88);color:#00FF00;
+                font-family:monospace;font-size:11px;padding:8px 10px;
+                max-height:220px;overflow-y:auto;
+            `;
+            // Botão fechar o logger
+            var closeLog = document.createElement('button');
+            closeLog.textContent = '✕ fechar log';
+            closeLog.style.cssText = 'display:block;margin-bottom:6px;background:#333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;';
+            closeLog.onclick = function() {{ logBox.remove(); }};
+            logBox.appendChild(closeLog);
+            document.addEventListener('DOMContentLoaded', function() {{
+                document.body.appendChild(logBox);
+            }});
+            if (document.body) document.body.appendChild(logBox);
+        }}
+
+        function pwaLog(msg) {{
+            console.log('[PWA] ' + msg);
+            if (!logBox) return;
+            var line = document.createElement('div');
+            line.textContent = new Date().toLocaleTimeString('pt-BR') + ' › ' + msg;
+            logBox.appendChild(line);
+            logBox.scrollTop = logBox.scrollHeight;
+        }}
+
+        pwaLog('🚀 Loader iniciado');
+        pwaLog('isApp: ' + isApp);
+        pwaLog('permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel'));
+        pwaLog('notif_asked: ' + localStorage.getItem('pwa_notif_asked'));
+        pwaLog('OneSignal carregado: ' + (typeof window.OneSignal !== 'undefined'));
+        // =============================================
 
         function initMeta() {{
             var link = document.createElement('link');
@@ -296,7 +332,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         function buildVisitPayload() {{
-            var payload = {{ store_id: '{store_id}', pagina: window.location.pathname, is_pwa: isApp, visitor_id: visitorId }};
+            var payload = {{ store_id:'{store_id}', pagina:window.location.pathname, is_pwa:isApp, visitor_id:visitorId }};
             try {{ if (window.LS && LS.store) payload.store_ls_id = LS.store.id; }} catch(e) {{}}
             try {{ if (window.LS && LS.product) {{ payload.product_id = LS.product.id; if (LS.product.name) payload.product_name = LS.product.name; }} }} catch(e) {{}}
             try {{ if (window.LS && LS.cart) {{ if (typeof LS.cart.subtotal !== 'undefined') payload.cart_total = LS.cart.subtotal; if (Array.isArray(LS.cart.items)) payload.cart_items_count = LS.cart.items.length; }} }} catch(e) {{}}
@@ -304,7 +340,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         }}
 
         function trackVisit() {{
-            try {{ fetch('{final_backend_url}/analytics/visita', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(buildVisitPayload()) }}); }} catch(e) {{ console.error('Erro Analytics:', e); }}
+            try {{ fetch('{final_backend_url}/analytics/visita', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(buildVisitPayload()) }}); }} catch(e) {{}}
         }}
 
         function initAnalytics() {{
@@ -326,23 +362,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Barra de notificação — chamada APÓS OneSignal estar pronto
+        // ✅ Barra de notificação — chamada APÓS OneSignal pronto
         function initNotificationBar() {{
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {{
-                console.log('[PWA] Notificação já concedida — barra não exibida');
+                pwaLog('❌ Barra bloqueada: permission=granted');
                 return;
             }}
             if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {{
-                console.log('[PWA] Notificação negada — barra não exibida');
+                pwaLog('❌ Barra bloqueada: permission=denied');
                 return;
             }}
             if (localStorage.getItem('pwa_notif_asked')) {{
-                console.log('[PWA] pwa_notif_asked já definido — barra não exibida');
+                pwaLog('❌ Barra bloqueada: notif_asked salvo');
                 return;
             }}
-            if (document.getElementById('pwa-notification-bar')) return;
+            if (document.getElementById('pwa-notification-bar')) {{
+                pwaLog('❌ Barra já existe no DOM');
+                return;
+            }}
 
-            console.log('[PWA] Exibindo barra de notificação em 3s...');
+            pwaLog('⏳ Barra será exibida em 3s...');
 
             setTimeout(function() {{
                 if (document.getElementById('pwa-notification-bar')) return;
@@ -369,33 +408,38 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     </div>
                 `;
                 document.body.appendChild(bar);
-                console.log('[PWA] Barra de notificação exibida');
+                pwaLog('✅ Barra exibida!');
 
                 document.getElementById('pwa-notif-allow').onclick = function() {{
                     localStorage.setItem('pwa_notif_asked', '1');
                     bar.remove();
-                    // ✅ OneSignal JÁ pronto aqui — prompt nativo do Android
+                    pwaLog('🔔 Solicitando permissão OneSignal...');
                     window.OneSignal.Notifications.requestPermission().then(function(granted) {{
-                        console.log('[PWA] Permissão:', granted ? 'concedida' : 'negada');
+                        pwaLog('Permissão: ' + (granted ? '✅ concedida' : '❌ negada'));
                     }});
                 }};
 
                 document.getElementById('pwa-notif-close').onclick = function() {{
                     localStorage.setItem('pwa_notif_asked', '1');
                     bar.remove();
+                    pwaLog('Barra fechada pelo usuário');
                 }};
             }}, 3000);
         }}
 
-        // ✅ OneSignal inicializa silenciosamente e chama barra só quando pronto
+        // ✅ OneSignal inicializa e chama barra somente quando SDK pronto
         function initOneSignalInApp() {{
-            if (!isApp) return;
+            if (!isApp) {{
+                pwaLog('initOneSignalInApp ignorado: não é PWA');
+                return;
+            }}
 
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
                 sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
                 sdkScript.defer = true;
                 document.head.appendChild(sdkScript);
+                pwaLog('SDK OneSignal injetado');
             }}
 
             window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -406,8 +450,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     serviceWorkerPath: '/app-builder/sw.js',
                     serviceWorkerParam: {{ scope: '/' }},
                 }});
-                console.log('[PWA] ✅ OneSignal pronto');
-                // ✅ Só chama barra DEPOIS do SDK estar 100% pronto
+                pwaLog('✅ OneSignal.init() concluído');
                 initNotificationBar();
             }});
         }}
@@ -447,7 +490,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                             var payload = {{ store_id:'{store_id}', visitor_id:visitorId, product_id:productId?String(productId):'', variant_id:variant&&variant.id?String(variant.id):'', variant_name:variant&&variant.name?String(variant.name):productName||null, price:variant&&typeof variant.price!=='undefined'?String(variant.price):null, stock:variant&&typeof variant.stock!=='undefined'?variant.stock:null }};
                             if (!payload.variant_id) return;
                             fetch('{final_backend_url}/analytics/variant', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload) }});
-                        }} catch(err) {{ console.log('Variant event error:', err); }}
+                        }} catch(err) {{}}
                     }});
                 }}
             }} catch(e) {{}}
@@ -469,28 +512,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         localStorage.setItem('venda_' + oid, 'true');
                     }}
                 }}
-            }} catch(e) {{ console.log('Venda tracking error:', e); }}
+            }} catch(e) {{}}
         }}
 
         try {{
             initMeta();
             initInstallCapture();
             initAnalytics();
-            initOneSignalInApp(); // ✅ SDK carrega → chama initNotificationBar() quando pronto
+            initOneSignalInApp();
         }} catch(e) {{
-            console.log('Critical block error:', e);
+            pwaLog('❌ Erro crítico: ' + e.message);
         }}
 
-        // ✅ Bottom bar aparece imediatamente
         if (document.readyState === 'loading') {{
             document.addEventListener('DOMContentLoaded', function() {{
-                try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{ console.log('Bottom bar init error:', e); }}
+                try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{}}
             }});
         }} else {{
-            try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{ console.log('Bottom bar init error:', e); }}
+            try {{ {bottom_bar_script} if (typeof initBottomBar === 'function') initBottomBar(); }} catch(e) {{}}
         }}
 
-        // ✅ FAB, Topbar e Popup — só fora do PWA
         setTimeout(function() {{
             try {{
                 {fab_script}
@@ -501,7 +542,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (typeof initInstallPopup === 'function') initInstallPopup();
                 initVariantTracking();
                 initSalesTracking();
-            }} catch(e) {{ console.log('Deferred block error:', e); }}
+            }} catch(e) {{}}
         }}, 800);
 
     }})();
