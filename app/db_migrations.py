@@ -4,7 +4,6 @@ import psycopg2
 from psycopg2 import sql
 
 def get_db_url():
-    # Ajuste estes nomes conforme as variáveis que o Railway expõe no seu projeto
     return (
         os.environ.get("DATABASE_URL")
         or os.environ.get("POSTGRES_URL")
@@ -23,7 +22,6 @@ def ensure_app_config_table_and_columns():
 
     print("[DB MIGRATION] Verificando tabela app_config...")
 
-    # 1) Garante que a tabela app_config exista (mínimo)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
@@ -35,7 +33,6 @@ def ensure_app_config_table_and_columns():
         );
     """)
 
-    # 2) Lista de colunas que queremos garantir
     desired_columns = {
         # FAB
         "fab_position": "VARCHAR",
@@ -47,7 +44,7 @@ def ensure_app_config_table_and_columns():
         "fab_color": "VARCHAR DEFAULT '#2563EB'",
         "fab_size": "VARCHAR DEFAULT 'medium'",
 
-        # TOP/BOTTOM BAR (banner / barra do widget)
+        # TOP/BOTTOM BAR
         "topbar_enabled": "BOOLEAN DEFAULT FALSE",
         "topbar_text": "VARCHAR DEFAULT 'Baixe nosso app'",
         "topbar_button_text": "VARCHAR DEFAULT 'Baixar'",
@@ -56,17 +53,18 @@ def ensure_app_config_table_and_columns():
         "topbar_color": "VARCHAR DEFAULT '#111827'",
         "topbar_text_color": "VARCHAR DEFAULT '#FFFFFF'",
         "topbar_size": "VARCHAR DEFAULT 'medium'",
-
-        # NOVOS CAMPOS – cores independentes do botão da barra
         "topbar_button_bg_color": "VARCHAR DEFAULT '#FBBF24'",
         "topbar_button_text_color": "VARCHAR DEFAULT '#111827'",
 
         # BOTTOM BAR DO APP (PWA)
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
+
+        # ✅ ONESIGNAL — multi-tenant, 1 app por loja
+        "onesignal_app_id": "VARCHAR(100)",
+        "onesignal_api_key": "VARCHAR(200)",
     }
 
-    # 3) Descobre quais colunas já existem na tabela
     cur.execute("""
         SELECT column_name
         FROM information_schema.columns
@@ -75,7 +73,6 @@ def ensure_app_config_table_and_columns():
     """)
     existing_cols = {row[0] for row in cur.fetchall()}
 
-    # 4) Cria apenas as colunas que estiverem faltando
     for col_name, col_type in desired_columns.items():
         if col_name not in existing_cols:
             alter_stmt = sql.SQL(
@@ -109,7 +106,6 @@ def ensure_lojas_logo_column():
 
     print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
 
-    # Verifica se a tabela lojas existe
     cur.execute("""
         SELECT EXISTS (
             SELECT 1
@@ -125,7 +121,6 @@ def ensure_lojas_logo_column():
         conn.close()
         return
 
-    # Verifica se a coluna logo_url já existe
     cur.execute("""
         SELECT column_name
         FROM information_schema.columns
