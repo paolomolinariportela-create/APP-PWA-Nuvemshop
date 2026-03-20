@@ -10,7 +10,7 @@ BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
 if BACKEND_URL and not BACKEND_URL.startswith("http"):
     BACKEND_URL = f"https://{BACKEND_URL}"
 
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+# ✅ VAPID removido — push é 100% via OneSignal
 
 
 @router.get("/loader.js", include_in_schema=False)
@@ -64,7 +64,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     popup_enabled = bool(getattr(config, "popup_enabled", False)) if config else False
     popup_image_url = getattr(config, "popup_image_url", "") or ""
 
-    # ✅ ÚNICO DADO NOVO — appId dinâmico do banco por loja
     onesignal_app_id = getattr(config, "onesignal_app_id", "") if config else ""
 
     fab_script = ""
@@ -318,7 +317,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         pwaLog('🚀 Loader v7 — multi-tenant');
         pwaLog('isApp: ' + isApp);
         pwaLog('permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel'));
-        pwaLog('notif_asked: ' + localStorage.getItem('pwa_notif_asked'));
+        // ✅ FIX 3: chave unificada 'notif_asked' (era 'pwa_notif_asked')
+        pwaLog('notif_asked: ' + localStorage.getItem('notif_asked'));
         pwaLog('onesignal_app_id: {onesignal_app_id or "NAO CONFIGURADO"}');
         // =============================================
 
@@ -373,7 +373,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 pwaLog('❌ Barra bloqueada: permission=denied');
                 return;
             }}
-            if (localStorage.getItem('pwa_notif_asked')) {{
+            // ✅ FIX 3: chave unificada 'notif_asked' (era 'pwa_notif_asked')
+            if (localStorage.getItem('notif_asked')) {{
                 pwaLog('❌ Barra bloqueada: notif_asked salvo');
                 return;
             }}
@@ -407,7 +408,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 pwaLog('✅ Barra exibida!');
 
                 document.getElementById('pwa-notif-allow').onclick = function() {{
-                    localStorage.setItem('pwa_notif_asked', '1');
+                    // ✅ FIX 3: chave unificada 'notif_asked'
+                    localStorage.setItem('notif_asked', '1');
                     bar.remove();
                     pwaLog('🔔 Solicitando permissão OneSignal...');
                     window.OneSignal.Notifications.requestPermission().then(function(granted) {{
@@ -415,14 +417,14 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     }});
                 }};
                 document.getElementById('pwa-notif-close').onclick = function() {{
-                    localStorage.setItem('pwa_notif_asked', '1');
+                    // ✅ FIX 3: chave unificada 'notif_asked'
+                    localStorage.setItem('notif_asked', '1');
                     bar.remove();
                     pwaLog('Barra fechada pelo usuário');
                 }};
             }}, 3000);
         }}
 
-        // ✅ appId dinâmico do banco — multi-tenant
         function initOneSignalInApp() {{
             if (!isApp) {{
                 pwaLog('OneSignal ignorado: não é PWA');
@@ -442,7 +444,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     window.OneSignal = OneSignal;
                     await OneSignal.init({{
                         appId: appId,
-                        serviceWorkerPath: '/app-builder/sw.js',
+                        // ✅ FIX 1: caminho correto do service worker
+                        serviceWorkerPath: '/service-worker.js',
                         serviceWorkerParam: {{ scope: '/' }},
                     }});
                     pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
