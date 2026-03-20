@@ -68,6 +68,8 @@ def ensure_app_config_table_and_columns():
         "popup_image_url": "TEXT",
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
+        "onesignal_app_id": "VARCHAR(100)",   # ← NOVO
+        "onesignal_api_key": "VARCHAR(200)",  # ← NOVO
     }
 
     cur.execute(
