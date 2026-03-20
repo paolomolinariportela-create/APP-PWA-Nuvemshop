@@ -68,8 +68,8 @@ def ensure_app_config_table_and_columns():
         "popup_image_url": "TEXT",
         "bottom_bar_bg": "VARCHAR DEFAULT '#FFFFFF'",
         "bottom_bar_icon_color": "VARCHAR DEFAULT '#6B7280'",
-        "onesignal_app_id": "VARCHAR(100)",   # ← NOVO
-        "onesignal_api_key": "VARCHAR(200)",  # ← NOVO
+        "onesignal_app_id": "VARCHAR(100)",
+        "onesignal_api_key": "VARCHAR(200)",
     }
 
     cur.execute(
@@ -189,7 +189,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers principais
+# ✅ Todas as rotas da API ANTES do mount do frontend
+# A ordem importa: StaticFiles em "/" captura tudo que não
+# foi resolvido por um router registrado antes dele.
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(loader_routes.router, tags=["Loader"])
@@ -203,18 +205,13 @@ def health_check():
     return {"status": "Online 🚀", "service": "App Builder Pro - Modular API"}
 
 
-# ✅ Service Worker para OneSignal (DEVE ficar antes do mount do frontend)
-@app.get("/sw.js", tags=["PWA"])
-def serve_service_worker():
-    content = 'importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");'
-    return Response(
-        content=content,
-        media_type="application/javascript",
-        headers={"Service-Worker-Allowed": "/"},
-    )
+# ✅ /sw.js removido daqui — está no pwa_routes.py com headers corretos
+# ✅ /app-builder/sw.js também está no pwa_routes.py com Service-Worker-Allowed: /
 
 
-# Frontend estático (SEMPRE por último)
+# ✅ Frontend estático — SEMPRE por último, NUNCA antes dos routers
+# O StaticFiles montado em "/" só recebe requisições que não
+# foram resolvidas por nenhuma rota do FastAPI acima.
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
