@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppConfig
- 
+
 router = APIRouter()
 
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
@@ -266,6 +266,13 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
     js = f"""
     (function() {{
+
+        // ✅ Limpa TODOS os SWs antigos na primeira execução
+        if ('serviceWorker' in navigator) {{
+            navigator.serviceWorker.getRegistrations().then(function(regs) {{
+                regs.forEach(function(r) {{ r.unregister(); }});
+            }});
+        }}
 
         var visitorId = localStorage.getItem('pwa_v_id');
         if (!visitorId) {{
