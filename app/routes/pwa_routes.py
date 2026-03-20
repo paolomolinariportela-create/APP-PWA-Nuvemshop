@@ -39,7 +39,7 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     })
 
 
-# Conteúdo do Service Worker — compartilhado pelas duas rotas abaixo
+# Conteúdo do Service Worker — compartilhado por todas as rotas abaixo
 SW_CONTENT = """
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
@@ -120,6 +120,19 @@ SW_HEADERS = {
 @router.get("/service-worker.js")
 def get_service_worker():
     """Rota direta — usada internamente e por browsers fora da Nuvemshop."""
+    return Response(
+        content=SW_CONTENT,
+        media_type="application/javascript",
+        headers=SW_HEADERS
+    )
+
+
+@router.get("/sw.js")
+def get_service_worker_root():
+    """
+    ✅ Fallback: caso o proxy da Nuvemshop repasse o pedido
+    sem o prefixo app-builder (direto como /sw.js).
+    """
     return Response(
         content=SW_CONTENT,
         media_type="application/javascript",
