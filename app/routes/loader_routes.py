@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import AppConfig
-
+ 
 router = APIRouter()
 
 BACKEND_URL = os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
