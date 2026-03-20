@@ -10,8 +10,6 @@ class Loja(Base):
     access_token = Column(String)
     email = Column(String, nullable=True)
     url = Column(String, nullable=True)
-
-    # Logo padrão da loja (vinda da Nuvemshop)
     logo_url = Column(String, nullable=True)
 
 
@@ -27,44 +25,44 @@ class AppConfig(Base):
     logo_url = Column(String, nullable=True)
     whatsapp_number = Column(String, nullable=True)
 
-    # FAB (botão flutuante "Baixar App")
-    fab_position = Column(String, default="right")   # 'left' ou 'right'
-    fab_icon = Column(String, default="📲")          # emoji ou URL
-    fab_animation = Column(Boolean, default=True)    # Ativar pulso?
-    fab_delay = Column(Integer, default=0)           # Segundos para aparecer
-    fab_enabled = Column(Boolean, default=False)     # Botão Flutuante 'Baixar App'
+    # FAB
+    fab_position = Column(String, default="right")
+    fab_icon = Column(String, default="📲")
+    fab_animation = Column(Boolean, default=True)
+    fab_delay = Column(Integer, default=0)
+    fab_enabled = Column(Boolean, default=False)
     fab_text = Column(String, default="Baixar App")
-    fab_color = Column(String, default="#2563EB")    # cor do botão
-    fab_size = Column(String, default="medium")      # 'xs' | 'small' | 'medium' | 'large' | 'xl'
-    fab_background_image_url = Column(String, nullable=True)  # NOVO: imagem de fundo do FAB
+    fab_color = Column(String, default="#2563EB")
+    fab_size = Column(String, default="medium")
+    fab_background_image_url = Column(String, nullable=True)
 
-    # TOP/BOTTOM BAR (banner / barra inferior do widget)
-    topbar_enabled = Column(Boolean, default=False)          # habilita banner/barra
-    topbar_text = Column(String, default="Baixe nosso app")  # texto principal
-    topbar_button_text = Column(String, default="Baixar")    # texto do botão
-    topbar_icon = Column(String, default="📲")               # ícone/emoji
-    topbar_position = Column(String, default="bottom")       # 'top' ou 'bottom'
-    topbar_color = Column(String, default="#111827")         # cor de fundo
-    topbar_text_color = Column(String, default="#FFFFFF")    # cor do texto
-    topbar_size = Column(String, default="medium")           # 'xs' | 'small' | 'medium' | 'large' | 'xl'
-
-    # NOVOS CAMPOS – cores independentes do botão da barra
+    # TOP/BOTTOM BAR
+    topbar_enabled = Column(Boolean, default=False)
+    topbar_text = Column(String, default="Baixe nosso app")
+    topbar_button_text = Column(String, default="Baixar")
+    topbar_icon = Column(String, default="📲")
+    topbar_position = Column(String, default="bottom")
+    topbar_color = Column(String, default="#111827")
+    topbar_text_color = Column(String, default="#FFFFFF")
+    topbar_size = Column(String, default="medium")
     topbar_button_bg_color = Column(String, default="#FBBF24", nullable=True)
     topbar_button_text_color = Column(String, default="#111827", nullable=True)
-
-    # NOVO: imagem de fundo da barra fixa
     topbar_background_image_url = Column(String, nullable=True)
 
-    # POPUP DE INSTALAÇÃO
+    # POPUP
     popup_enabled = Column(Boolean, default=False)
     popup_image_url = Column(String, nullable=True)
 
-    # BOTTOM BAR DO APP (barra de navegação inferior do PWA)
-    bottom_bar_bg = Column(String, default="#FFFFFF")          # Fundo da barra
-    bottom_bar_icon_color = Column(String, default="#6B7280")  # Cor ícones/labels
+    # BOTTOM BAR DO PWA
+    bottom_bar_bg = Column(String, default="#FFFFFF")
+    bottom_bar_icon_color = Column(String, default="#6B7280")
+
+    # ✅ ONESIGNAL — multi-tenant, 1 app por loja
+    onesignal_app_id = Column(String(100), nullable=True)
+    onesignal_api_key = Column(String(200), nullable=True)
 
 
-# Tabela de Vendas (Estatísticas)
+# Tabela de Vendas
 class VendaApp(Base):
     __tablename__ = "vendas_app"
 
@@ -75,7 +73,7 @@ class VendaApp(Base):
     visitor_id = Column(String, index=True, nullable=True)
 
 
-# Tabela de Visitas (Analytics)
+# Tabela de Visitas
 class VisitaApp(Base):
     __tablename__ = "visitas_app"
 
@@ -87,19 +85,16 @@ class VisitaApp(Base):
     visitor_id = Column(String, index=True, nullable=True)
 
 
-# Tabela de Notificações (Web Push)
+# Notificações Web Push
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
     store_id = Column(String, index=True)
     visitor_id = Column(String, index=True)
-
-    # Dados técnicos do WebPush
-    endpoint = Column(Text, nullable=False)  # URL única do navegador
-    p256dh = Column(String, nullable=False)  # Chave Pública 1
-    auth = Column(String, nullable=False)    # Chave de Auth 2
-
+    endpoint = Column(Text, nullable=False)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
     created_at = Column(String)
 
 
@@ -112,12 +107,12 @@ class PushHistory(Base):
     title = Column(String)
     message = Column(String)
     url = Column(String)
-    clicks = Column(Integer, default=0)       # Para contar cliques no futuro
-    sent_count = Column(Integer, default=0)   # Quantas pessoas receberam
-    created_at = Column(String)               # Data de envio (ISO Format)
+    clicks = Column(Integer, default=0)
+    sent_count = Column(Integer, default=0)
+    created_at = Column(String)
 
 
-# Eventos de mudança de variante
+# Eventos de variante
 class VariantEvent(Base):
     __tablename__ = "variant_events"
 
@@ -127,6 +122,6 @@ class VariantEvent(Base):
     product_id = Column(String, index=True)
     variant_id = Column(String, index=True)
     variant_name = Column(String, nullable=True)
-    price = Column(String, nullable=True)   # mantendo string como em VendaApp
+    price = Column(String, nullable=True)
     stock = Column(Integer, nullable=True)
-    data = Column(String)  # datetime em ISO
+    data = Column(String)
