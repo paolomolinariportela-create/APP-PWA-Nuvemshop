@@ -31,8 +31,6 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     )
 
     # ✅ start_url absoluto com domínio real da loja
-    # Evita o erro "start_url ignored, should be same origin as document"
-    # que ocorre quando o manifest é servido de um domínio diferente da loja.
     store_url = loja.url if (loja and loja.url) else None
     if store_url:
         if not store_url.startswith("http"):
@@ -57,7 +55,7 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     })
 
 
-# Conteúdo do Service Worker — compartilhado por todas as rotas abaixo
+# Conteúdo do Service Worker — compartilhado por todas as rotas
 SW_CONTENT = """
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
@@ -121,7 +119,6 @@ self.addEventListener('fetch', (event) => {
                     .catch((err) => {
                         if (cachedResponse) return cachedResponse;
                         throw err;
-                        throw err;
                     });
                 return cachedResponse || fetchPromise;
             })
@@ -136,42 +133,37 @@ SW_HEADERS = {
 }
 
 
-@router.get("/service-worker.js")
-def get_service_worker():
-    """Rota direta — usada internamente e por browsers fora da Nuvemshop."""
+def sw_response():
     return Response(
         content=SW_CONTENT,
         media_type="application/javascript",
         headers=SW_HEADERS
     )
+
+
+@router.get("/service-worker.js")
+def get_service_worker():
+    """Rota direta — usada internamente."""
+    return sw_response()
 
 
 @router.get("/sw.js")
 def get_service_worker_root():
-    """
-    ✅ Fallback: caso o proxy da Nuvemshop repasse o pedido
-    sem o prefixo app-builder (direto como /sw.js).
-    """
-    return Response(
-        content=SW_CONTENT,
-        media_type="application/javascript",
-        headers=SW_HEADERS
-    )
+    """Fallback sem prefixo."""
+    return sw_response()
 
 
 @router.get("/app-builder/sw.js")
+def get_service_worker_proxy_sw():
+    """Proxy Nuvemshop — /app-builder/sw.js"""
+    return sw_response()
+
+
+@router.get("/app-builder/service-worker.js")
 def get_service_worker_proxy():
     """
-    ✅ Rota via proxy da Nuvemshop.
-    A Nuvemshop registrou o proxy:
-      prefixo:  app-builder
-      base URL: https://web-production-0b509.up.railway.app/
-    Isso faz com que lojadocliente.com.br/app-builder/sw.js
-    aponte para este endpoint, permitindo que o OneSignal
-    registre o SW na raiz da loja.
+    ✅ Rota principal via proxy Nuvemshop.
+    loja.com/apps/app-builder/service-worker.js
+    → railway/app-builder/service-worker.js
     """
-    return Response(
-        content=SW_CONTENT,
-        media_type="application/javascript",
-        headers=SW_HEADERS
-    )
+    return sw_response()
