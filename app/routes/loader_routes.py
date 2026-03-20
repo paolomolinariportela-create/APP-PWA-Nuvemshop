@@ -317,7 +317,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         pwaLog('🚀 Loader v7 — multi-tenant');
         pwaLog('isApp: ' + isApp);
         pwaLog('permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel'));
-        // ✅ FIX 3: chave unificada 'notif_asked' (era 'pwa_notif_asked')
         pwaLog('notif_asked: ' + localStorage.getItem('notif_asked'));
         pwaLog('onesignal_app_id: {onesignal_app_id or "NAO CONFIGURADO"}');
         // =============================================
@@ -366,14 +365,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         function initNotificationBar() {{
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {{
-                pwaLog('❌ Barra bloqueada: permission=granted');
+                // ✅ Permissão já concedida — chama optIn() direto para sincronizar com OneSignal
+                pwaLog('⚠️ permission=granted — chamando optIn() direto para sincronizar');
+                try {{
+                    window.OneSignal.User.PushSubscription.optIn().then(function() {{
+                        pwaLog('✅ optIn() concluído — usuário inscrito');
+                    }}).catch(function(e) {{
+                        pwaLog('❌ optIn() erro: ' + e.message);
+                    }});
+                }} catch(e) {{
+                    pwaLog('❌ optIn() exceção: ' + e.message);
+                }}
                 return;
             }}
             if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {{
                 pwaLog('❌ Barra bloqueada: permission=denied');
                 return;
             }}
-            // ✅ FIX 3: chave unificada 'notif_asked' (era 'pwa_notif_asked')
             if (localStorage.getItem('notif_asked')) {{
                 pwaLog('❌ Barra bloqueada: notif_asked salvo');
                 return;
@@ -408,16 +416,17 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 pwaLog('✅ Barra exibida!');
 
                 document.getElementById('pwa-notif-allow').onclick = function() {{
-                    // ✅ FIX 3: chave unificada 'notif_asked'
                     localStorage.setItem('notif_asked', '1');
                     bar.remove();
-                    pwaLog('🔔 Solicitando permissão OneSignal...');
-                    window.OneSignal.Notifications.requestPermission().then(function(granted) {{
-                        pwaLog('Permissão: ' + (granted ? '✅ concedida' : '❌ negada'));
+                    pwaLog('🔔 Chamando optIn()...');
+                    // ✅ SDK v16: optIn() é o método correto
+                    window.OneSignal.User.PushSubscription.optIn().then(function() {{
+                        pwaLog('✅ optIn() concluído — usuário inscrito');
+                    }}).catch(function(e) {{
+                        pwaLog('❌ optIn() erro: ' + e.message);
                     }});
                 }};
                 document.getElementById('pwa-notif-close').onclick = function() {{
-                    // ✅ FIX 3: chave unificada 'notif_asked'
                     localStorage.setItem('notif_asked', '1');
                     bar.remove();
                     pwaLog('Barra fechada pelo usuário');
@@ -444,11 +453,23 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     window.OneSignal = OneSignal;
                     await OneSignal.init({{
                         appId: appId,
-                        // ✅ FIX 1: caminho correto do service worker
                         serviceWorkerPath: '/service-worker.js',
                         serviceWorkerParam: {{ scope: '/' }},
                     }});
                     pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
+
+                    // ✅ DIAGNÓSTICO — estado real após init
+                    var nativePerm = typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel';
+                    pwaLog('Notification.permission nativo: ' + nativePerm);
+                    try {{
+                        var optedIn = OneSignal.User.PushSubscription.optedIn;
+                        pwaLog('optedIn: ' + optedIn);
+                    }} catch(e) {{ pwaLog('Erro ao ler optedIn: ' + e.message); }}
+                    try {{
+                        var subId = OneSignal.User.PushSubscription.id;
+                        pwaLog('subscription id: ' + (subId || 'null'));
+                    }} catch(e) {{ pwaLog('Erro ao ler subscription id: ' + e.message); }}
+
                     initNotificationBar();
                 }} catch(err) {{
                     pwaLog('❌ Erro no OneSignal.init(): ' + err.message);
