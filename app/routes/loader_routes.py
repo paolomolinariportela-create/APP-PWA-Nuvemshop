@@ -455,6 +455,18 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 return;
             }}
 
+            // ✅ Desregistra SW antigo (escopo /) antes de registrar novo (/apps/app-builder/)
+            if ('serviceWorker' in navigator) {{
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {{
+                    registrations.forEach(function(r) {{
+                        if (r.scope.endsWith('/') && !r.scope.includes('/apps/')) {{
+                            pwaLog('SW antigo: ' + r.scope + ' — desregistrando...');
+                            r.unregister();
+                        }}
+                    }});
+                }});
+            }}
+
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
