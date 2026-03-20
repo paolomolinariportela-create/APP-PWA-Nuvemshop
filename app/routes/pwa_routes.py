@@ -167,3 +167,13 @@ def get_service_worker_proxy():
     → railway/app-builder/service-worker.js
     """
     return sw_response()
+
+
+@router.get("/app-builder/manifest/{store_id}.json")
+def get_manifest_proxy(store_id: str, db: Session = Depends(get_db)):
+    """
+    ✅ Manifest via proxy Nuvemshop.
+    loja.com/apps/app-builder/manifest/{store_id}.json
+    → railway/app-builder/manifest/{store_id}.json
+    """
+    return get_manifest(store_id, db)
