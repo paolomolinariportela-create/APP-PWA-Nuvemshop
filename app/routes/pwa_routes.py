@@ -43,6 +43,8 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
 @router.get("/service-worker.js")
 def get_service_worker():
     js_content = """
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
 const CACHE_NAME = 'app-builder-cache-v1';
 const PRECACHE_URLS = [
     '/service-worker.js',
