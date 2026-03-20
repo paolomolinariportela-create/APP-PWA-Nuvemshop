@@ -64,6 +64,9 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     popup_enabled = bool(getattr(config, "popup_enabled", False)) if config else False
     popup_image_url = getattr(config, "popup_image_url", "") or ""
 
+    # ✅ ÚNICO DADO NOVO — appId dinâmico do banco por loja
+    onesignal_app_id = getattr(config, "onesignal_app_id", "") if config else ""
+
     fab_script = ""
     if fab_enabled:
         fab_script = f"""
@@ -104,8 +107,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\"')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\"')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\\\"')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\"')
         background_style = (
             f"background-image:url('{topbar_background_image_url}');background-size:cover;background-position:center;"
             if topbar_background_image_url else f"background:{topbar_color};"
@@ -312,11 +315,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             logBox.scrollTop = logBox.scrollHeight;
         }}
 
-        pwaLog('🚀 Loader iniciado');
+        pwaLog('🚀 Loader v7 — multi-tenant');
         pwaLog('isApp: ' + isApp);
         pwaLog('permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel'));
         pwaLog('notif_asked: ' + localStorage.getItem('pwa_notif_asked'));
-        pwaLog('OneSignal carregado: ' + (typeof window.OneSignal !== 'undefined'));
+        pwaLog('onesignal_app_id: {onesignal_app_id or "NAO CONFIGURADO"}');
         // =============================================
 
         function initMeta() {{
@@ -361,7 +364,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
-        // ✅ Barra de notificação — chamada APÓS OneSignal pronto
         function initNotificationBar() {{
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {{
                 pwaLog('❌ Barra bloqueada: permission=granted');
@@ -375,16 +377,11 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 pwaLog('❌ Barra bloqueada: notif_asked salvo');
                 return;
             }}
-            if (document.getElementById('pwa-notification-bar')) {{
-                pwaLog('❌ Barra já existe no DOM');
-                return;
-            }}
+            if (document.getElementById('pwa-notification-bar')) return;
 
             pwaLog('⏳ Barra será exibida em 3s...');
-
             setTimeout(function() {{
                 if (document.getElementById('pwa-notification-bar')) return;
-
                 var bar = document.createElement('div');
                 bar.id = 'pwa-notification-bar';
                 bar.style.cssText = `
@@ -417,7 +414,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         pwaLog('Permissão: ' + (granted ? '✅ concedida' : '❌ negada'));
                     }});
                 }};
-
                 document.getElementById('pwa-notif-close').onclick = function() {{
                     localStorage.setItem('pwa_notif_asked', '1');
                     bar.remove();
@@ -426,26 +422,30 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }}, 3000);
         }}
 
-        // ✅ CORREÇÃO PRINCIPAL — sem defer + onload + try/catch no init
+        // ✅ appId dinâmico do banco — multi-tenant
         function initOneSignalInApp() {{
             if (!isApp) {{
-                pwaLog('initOneSignalInApp ignorado: não é PWA');
+                pwaLog('OneSignal ignorado: não é PWA');
                 return;
             }}
 
-            // ✅ Define o array ANTES de injetar o script
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            var appId = '{onesignal_app_id}';
+            if (!appId) {{
+                pwaLog('❌ OneSignal: onesignal_app_id não configurado para esta loja');
+                return;
+            }}
 
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
             window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
                     pwaLog('OneSignal callback disparado');
                     window.OneSignal = OneSignal;
                     await OneSignal.init({{
-                        appId: '91487f5b-2269-4d8a-8001-e9bb8b76bb38',
+                        appId: appId,
                         serviceWorkerPath: '/app-builder/sw.js',
                         serviceWorkerParam: {{ scope: '/' }},
                     }});
-                    pwaLog('✅ OneSignal.init() concluído');
+                    pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
                     initNotificationBar();
                 }} catch(err) {{
                     pwaLog('❌ Erro no OneSignal.init(): ' + err.message);
@@ -455,15 +455,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
                 sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-                // ✅ SEM defer — carrega imediatamente e dispara o callback
-                sdkScript.onload = function() {{
-                    pwaLog('✅ SDK script carregado (onload)');
-                }};
-                sdkScript.onerror = function() {{
-                    pwaLog('❌ ERRO ao carregar SDK — verifique conexão ou bloqueador');
-                }};
+                sdkScript.onload = function() {{ pwaLog('✅ SDK carregado (onload)'); }};
+                sdkScript.onerror = function() {{ pwaLog('❌ ERRO ao carregar SDK'); }};
                 document.head.appendChild(sdkScript);
-                pwaLog('SDK OneSignal injetado (sem defer)');
+                pwaLog('SDK OneSignal injetado');
             }}
         }}
 
