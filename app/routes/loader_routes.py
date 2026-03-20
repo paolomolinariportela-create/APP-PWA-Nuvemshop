@@ -463,7 +463,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     await OneSignal.init({{
                         appId: appId,
                         serviceWorkerPath: '/apps/app-builder/service-worker.js',
-                        serviceWorkerParam: {{ scope: '/' }},
+                        serviceWorkerParam: {{ scope: '/apps/app-builder/' }},
                     }});
                     pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
 
