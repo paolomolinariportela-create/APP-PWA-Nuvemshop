@@ -18,7 +18,6 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     app_name = config.app_name if config else "Minha Loja"
     theme_color = config.theme_color if (config and config.theme_color) else "#000000"
     background_color = theme_color
-
     icon_src = (
         config.logo_url
         if (config and config.logo_url)
@@ -40,9 +39,8 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     })
 
 
-@router.get("/service-worker.js")
-def get_service_worker():
-    js_content = """
+# Conteúdo do Service Worker — compartilhado pelas duas rotas abaixo
+SW_CONTENT = """
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 const CACHE_NAME = 'app-builder-cache-v1';
@@ -80,10 +78,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const req = event.request;
     if (req.method !== 'GET') return;
-
     const acceptHeader = req.headers.get('Accept') || '';
     if (acceptHeader.includes('text/html')) return;
-
     if (
         req.url.includes('/manifest') ||
         req.url.endsWith('.js') ||
@@ -114,11 +110,36 @@ self.addEventListener('fetch', (event) => {
     }
 });
 """
+
+SW_HEADERS = {
+    "Service-Worker-Allowed": "/",
+    "Cache-Control": "no-cache, no-store, must-revalidate"
+}
+
+
+@router.get("/service-worker.js")
+def get_service_worker():
+    """Rota direta — usada internamente e por browsers fora da Nuvemshop."""
     return Response(
-        content=js_content,
+        content=SW_CONTENT,
         media_type="application/javascript",
-        headers={
-            "Service-Worker-Allowed": "/",
-            "Cache-Control": "public, max-age=3600"
-        }
+        headers=SW_HEADERS
+    )
+
+
+@router.get("/app-builder/sw.js")
+def get_service_worker_proxy():
+    """
+    ✅ Rota via proxy da Nuvemshop.
+    A Nuvemshop registrou o proxy:
+      prefixo:  app-builder
+      base URL: https://web-production-0b509.up.railway.app/
+    Isso faz com que lojadocliente.com.br/app-builder/sw.js
+    aponte para este endpoint, permitindo que o OneSignal
+    registre o SW na raiz da loja.
+    """
+    return Response(
+        content=SW_CONTENT,
+        media_type="application/javascript",
+        headers=SW_HEADERS
     )
