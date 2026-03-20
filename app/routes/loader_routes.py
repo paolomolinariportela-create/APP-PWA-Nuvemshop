@@ -324,7 +324,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
         function initMeta() {{
             var link = document.createElement('link');
             link.rel = 'manifest';
-            link.href = '{final_backend_url}/manifest/{store_id}.json';
+            link.href = '/apps/app-builder/manifest/{store_id}.json';
             document.head.appendChild(link);
             var meta = document.createElement('meta');
             meta.name = 'theme-color';
