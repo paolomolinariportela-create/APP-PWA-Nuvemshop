@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import AppConfig
+from app.models import AppConfig, Loja
 
 router = APIRouter()
 
@@ -12,8 +12,14 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
     try:
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     except Exception as e:
-        print(f"Erro no banco PWA: {e}")
+        print(f"Erro no banco PWA (config): {e}")
         config = None
+
+    try:
+        loja = db.query(Loja).filter(Loja.store_id == store_id).first()
+    except Exception as e:
+        print(f"Erro no banco PWA (loja): {e}")
+        loja = None
 
     app_name = config.app_name if config else "Minha Loja"
     theme_color = config.theme_color if (config and config.theme_color) else "#000000"
@@ -24,10 +30,22 @@ def get_manifest(store_id: str, db: Session = Depends(get_db)):
         else "https://cdn-icons-png.flaticon.com/512/3081/3081559.png"
     )
 
+    # ✅ start_url absoluto com domínio real da loja
+    # Evita o erro "start_url ignored, should be same origin as document"
+    # que ocorre quando o manifest é servido de um domínio diferente da loja.
+    store_url = loja.url if (loja and loja.url) else None
+    if store_url:
+        if not store_url.startswith("http"):
+            store_url = f"https://{store_url}"
+        store_url = store_url.rstrip("/")
+        start_url = f"{store_url}/?utm_source=pwa_app&store_id={store_id}"
+    else:
+        start_url = f"/?utm_source=pwa_app&store_id={store_id}"
+
     return JSONResponse({
         "name": app_name,
         "short_name": app_name[:12],
-        "start_url": f"/?utm_source=pwa_app&store_id={store_id}",
+        "start_url": start_url,
         "display": "standalone",
         "background_color": background_color,
         "theme_color": theme_color,
@@ -102,6 +120,7 @@ self.addEventListener('fetch', (event) => {
                     })
                     .catch((err) => {
                         if (cachedResponse) return cachedResponse;
+                        throw err;
                         throw err;
                     });
                 return cachedResponse || fetchPromise;
