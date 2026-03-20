@@ -453,7 +453,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                     window.OneSignal = OneSignal;
                     await OneSignal.init({{
                         appId: appId,
-                        serviceWorkerPath: '/service-worker.js',
+                        // ✅ Proxy Nuvemshop: loja.com/app-builder/sw.js → railway/app-builder/sw.js
+                        serviceWorkerPath: '/app-builder/sw.js',
                         serviceWorkerParam: {{ scope: '/' }},
                     }});
                     pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
