@@ -20,7 +20,6 @@ def get_db_url():
 def ensure_app_config_table_and_columns():
     db_url = get_db_url()
     if not db_url:
-        print("[DB MIGRATION] DATABASE_URL nao encontrado.")
         return
 
     conn = psycopg2.connect(db_url)
@@ -78,9 +77,9 @@ def ensure_app_config_table_and_columns():
             alter_stmt = sql.SQL(
                 "ALTER TABLE app_config ADD COLUMN {name} {ctype};"
             ).format(name=sql.Identifier(col_name), ctype=sql.SQL(col_type))
-            print(f"[DB MIGRATION] Adicionando coluna: {col_name}")
             try:
                 cur.execute(alter_stmt)
+                print(f"[DB MIGRATION] Adicionando coluna: {col_name}")
             except Exception as e:
                 print(f"[DB MIGRATION] Erro ao adicionar coluna {col_name}: {e}")
 
@@ -120,7 +119,7 @@ def ensure_lojas_logo_column():
             cur.execute("ALTER TABLE lojas ADD COLUMN logo_url VARCHAR;")
             print("[DB MIGRATION] Coluna logo_url criada em lojas.")
         except Exception as e:
-            print(f"[DB MIGRATION] Erro ao adicionar logo_url: {e}")
+            print(f"[DB MIGRATION] Erro: {e}")
 
     cur.close()
     conn.close()
@@ -142,16 +141,46 @@ from app.routes import (
     pwa_routes,
     stats_routes,
     webhook_routes,
+    automacao_routes,
 )
 
 # Migracoes + criacao de tabelas
 run_all_migrations()
 Base.metadata.create_all(bind=engine)
 
+# ✅ SCHEDULER — APScheduler com persistencia no Postgres
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+
+def criar_scheduler():
+    db_url = get_db_url()
+    if not db_url:
+        print("[SCHEDULER] DATABASE_URL nao encontrado — scheduler sem persistencia")
+        jobstores = {}
+    else:
+        jobstores = {
+            "default": SQLAlchemyJobStore(url=db_url)
+        }
+
+    scheduler = BackgroundScheduler(
+        jobstores=jobstores,
+        job_defaults={
+            "coalesce": True,       # se atrasou, roda só 1 vez
+            "max_instances": 1,     # evita duplicatas
+            "misfire_grace_time": 3600,  # tolera 1h de atraso (ex: deploy)
+        },
+        timezone="America/Sao_Paulo",
+    )
+    return scheduler
+
+scheduler = criar_scheduler()
+scheduler.start()
+print("[SCHEDULER] APScheduler iniciado com SQLAlchemyJobStore")
+
 app = FastAPI(
     title="App Builder Pro API",
-    description="API Modular para criacao de PWAs, Push Notifications e Analytics.",
-    version="2.0.0",
+    description="API Modular para PWAs, Push Notifications, Analytics e Automacoes.",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -162,6 +191,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Disponibiliza o scheduler para as rotas via app.state
+app.state.scheduler = scheduler
+
 # Todas as rotas ANTES do StaticFiles
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
@@ -171,11 +203,24 @@ app.include_router(analytics_routes.router)
 app.include_router(pwa_routes.router, tags=["PWA"])
 app.include_router(stats_routes.router)
 app.include_router(webhook_routes.router)
+app.include_router(automacao_routes.router)
 
 
 @app.get("/health", tags=["System"])
 def health_check():
-    return {"status": "Online", "service": "App Builder Pro - Modular API"}
+    jobs = scheduler.get_jobs()
+    return {
+        "status": "Online",
+        "service": "App Builder Pro",
+        "scheduler": "running",
+        "jobs_agendados": len(jobs),
+    }
+
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    scheduler.shutdown(wait=False)
+    print("[SCHEDULER] APScheduler encerrado.")
 
 
 # Frontend estatico — SEMPRE por ultimo
