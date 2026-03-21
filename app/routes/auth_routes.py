@@ -223,6 +223,7 @@ def install():
 
 
 @router.get("/callback")
+@router.post("/callback")
 def callback(code: str = Query(None), db: Session = Depends(get_db)):
     if not code:
         return RedirectResponse(f"{FRONTEND_URL}?error=no_code")
@@ -323,6 +324,7 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
 
 
 @router.get("/auth/callback")
+@router.post("/auth/callback")
 def auth_callback_alias(code: str = Query(None), db: Session = Depends(get_db)):
     return callback(code=code, db=db)
 
