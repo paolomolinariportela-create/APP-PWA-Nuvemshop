@@ -167,20 +167,19 @@ from app.routes import (
     push_routes,
     analytics_routes,
     pwa_routes,
+    stats_routes,
 )
 
 # Migrações + criação de tabelas
 run_all_migrations()
 Base.metadata.create_all(bind=engine)
 
-# ÚNICA instância do app
 app = FastAPI(
     title="App Builder Pro API",
     description="API Modular para criação de PWAs, Push Notifications e Analytics.",
     version="2.0.0",
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -189,29 +188,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Todas as rotas da API ANTES do mount do frontend
-# A ordem importa: StaticFiles em "/" captura tudo que não
-# foi resolvido por um router registrado antes dele.
+# ✅ Todas as rotas ANTES do StaticFiles
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(loader_routes.router, tags=["Loader"])
 app.include_router(push_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(pwa_routes.router, tags=["PWA"])
+app.include_router(stats_routes.router)
 
 
 @app.get("/health", tags=["System"])
 def health_check():
-    return {"status": "Online 🚀", "service": "App Builder Pro - Modular API"}
+    return {"status": "Online", "service": "App Builder Pro - Modular API"}
 
 
-# ✅ /sw.js removido daqui — está no pwa_routes.py com headers corretos
-# ✅ /app-builder/sw.js também está no pwa_routes.py com Service-Worker-Allowed: /
-
-
-# ✅ Frontend estático — SEMPRE por último, NUNCA antes dos routers
-# O StaticFiles montado em "/" só recebe requisições que não
-# foram resolvidas por nenhuma rota do FastAPI acima.
+# ✅ Frontend estático — SEMPRE por último
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
