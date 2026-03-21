@@ -106,8 +106,8 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     topbar_script = ""
     if topbar_enabled:
         top_position_css = "top:0;" if topbar_position == "top" else "bottom:0;"
-        safe_topbar_text = (topbar_text or "").replace('"', '\\\\"')
-        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\\\"')
+        safe_topbar_text = (topbar_text or "").replace('"', '\\"')
+        safe_topbar_button_text = (topbar_button_text or "").replace('"', '\\"')
         background_style = (
             f"background-image:url('{topbar_background_image_url}');background-size:cover;background-position:center;"
             if topbar_background_image_url else f"background:{topbar_color};"
@@ -582,6 +582,49 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch(e) {{}}
         }}
 
+        // ✅ ESPIÃO DO CARRINHO ABANDONADO (ON-THE-FLY)
+        function initCartTracking() {{
+            try {{
+                // 1. Se finalizou a compra, remove a tag e para de monitorar
+                if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
+                    window.OneSignalDeferred = window.OneSignalDeferred || [];
+                    window.OneSignalDeferred.push(function(OneSignal) {{
+                        OneSignal.User.addTag("carrinho_ativo", "false");
+                        pwaLog("🛒 Compra concluída! Tag 'carrinho_ativo' definida como false");
+                    }});
+                    return; // Interrompe o espião nesta página
+                }}
+
+                // 2. Monitoramento silencioso (A cada 3 segundos confere se tem itens no carrinho da Nuvemshop)
+                var lastCartCount = -1;
+                setInterval(function() {{
+                    try {{
+                        if (window.LS && window.LS.cart && Array.isArray(window.LS.cart.items)) {{
+                            var currentCount = window.LS.cart.items.length;
+                            
+                            // Se a quantidade de itens mudou (adicionou ou removeu)
+                            if (currentCount !== lastCartCount) {{
+                                lastCartCount = currentCount;
+                                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                                
+                                window.OneSignalDeferred.push(function(OneSignal) {{
+                                    if (currentCount > 0) {{
+                                        OneSignal.User.addTag("carrinho_ativo", "true");
+                                        pwaLog("🛒 Carrinho atualizado: true (" + currentCount + " itens)");
+                                    }} else {{
+                                        OneSignal.User.addTag("carrinho_ativo", "false");
+                                        pwaLog("🛒 Carrinho esvaziado: false");
+                                    }}
+                                }});
+                            }}
+                        }}
+                    }} catch(err) {{}}
+                }}, 3000); // 3000ms = 3 segundos
+            }} catch(e) {{
+                pwaLog('❌ Erro no Cart Tracking: ' + e.message);
+            }}
+        }}
+
         try {{
             initMeta();
             initInstallCapture();
@@ -609,6 +652,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (typeof initInstallPopup === 'function') initInstallPopup();
                 initVariantTracking();
                 initSalesTracking();
+                initCartTracking(); // 👈 Inicializa o rastreio do carrinho aqui!
             }} catch(e) {{}}
         }}, 800);
 
