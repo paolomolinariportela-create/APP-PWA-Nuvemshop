@@ -66,17 +66,17 @@ def criar_app_onesignal_sync(store_id: str, store_domain: str, store_name: str) 
 def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
     """
     Registra automaticamente os webhooks necessários na Nuvemshop.
-    Eventos em PLURAL conforme exigido pela API v1.
+    Cada loja recebe webhooks apontando para a URL com seu store_id.
+    Eventos: order/paid, order/packed, order/shipped, order/delivered, order/cancelled
     """
     webhook_base_url = f"{BACKEND_URL}/webhooks/nuvemshop/order/{store_id}"
 
-    # ✅ CORREÇÃO: Nomes no plural
+    # Eventos de pedido que queremos monitorar
     eventos = [
-        "orders/paid",
-        "orders/packed",
-        "orders/shipped",
-        "orders/delivered",
-        "orders/cancelled",
+        "order/paid",
+        "order/packed",
+        "order/fulfilled",
+        "order/cancelled",
     ]
 
     headers = {
@@ -85,11 +85,13 @@ def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
         "User-Agent": "AppBuilder (Builder)",
     }
 
+    # Tenta nas duas URLs da API (tiendanube e nuvemshop)
     apis = [
         f"https://api.tiendanube.com/v1/{store_id}/webhooks",
         f"https://api.nuvemshop.com.br/v1/{store_id}/webhooks",
     ]
 
+    # Verifica webhooks já registrados para evitar duplicatas
     webhooks_existentes = set()
     for api_url in apis:
         try:
@@ -104,8 +106,12 @@ def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
         except Exception:
             continue
 
+    print(f"[WEBHOOK REGISTER] Webhooks ja existentes para loja {store_id}: {webhooks_existentes}")
+
+    # Registra apenas os que ainda nao existem
     for evento in eventos:
         if evento in webhooks_existentes:
+            print(f"[WEBHOOK REGISTER] Evento '{evento}' ja registrado, pulando.")
             continue
 
         payload = {
@@ -113,19 +119,24 @@ def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
             "url": webhook_base_url,
         }
 
+        sucesso = False
         for api_url in apis:
             try:
                 res = requests.post(api_url, json=payload, headers=headers, timeout=10)
                 if res.status_code in (200, 201):
-                    print(f"[WEBHOOK] '{evento}' registrado com sucesso.")
+                    print(f"[WEBHOOK REGISTER] '{evento}' registrado para loja {store_id}")
+                    sucesso = True
                     break
                 elif res.status_code == 404:
                     continue
                 else:
-                    print(f"[WEBHOOK] Erro {res.status_code} em {evento}: {res.text}")
+                    print(f"[WEBHOOK REGISTER] Erro {res.status_code} para '{evento}': {res.text[:200]}")
                     break
             except Exception as e:
-                print(f"[WEBHOOK] Erro: {e}")
+                print(f"[WEBHOOK REGISTER] Exception para '{evento}': {e}")
+
+        if not sucesso:
+            print(f"[WEBHOOK REGISTER] Falhou ao registrar '{evento}' para loja {store_id}")
 
 
 def create_landing_page_internal(store_id: str, access_token: str, theme_color: str):
@@ -156,9 +167,12 @@ def create_landing_page_internal(store_id: str, access_token: str, theme_color: 
         try:
             res = requests.post(url, json=payload, headers=headers)
             if res.status_code == 201:
+                print(f"Pagina criada para loja {store_id}")
                 return
-        except Exception:
-            pass
+            elif res.status_code == 404:
+                continue
+        except Exception as e:
+            print(f"Erro ao criar pagina: {e}")
 
 
 def inject_script_tag(store_id: str, access_token: str):
@@ -179,27 +193,30 @@ def inject_script_tag(store_id: str, access_token: str):
             if isinstance(scripts, list):
                 for s in scripts:
                     if isinstance(s, dict) and "loader.js" in s.get("src", ""):
+                        print(f"Script ja injetado na loja {store_id}. Pulando.")
                         return
-        requests.post(url, json=payload, headers=headers)
-    except Exception:
-        pass
+        res = requests.post(url, json=payload, headers=headers)
+        if res.status_code == 404:
+            url_alt = f"https://api.nuvemshop.com.br/v1/{store_id}/scripts"
+            res = requests.post(url_alt, json=payload, headers=headers)
+        if res.status_code == 201:
+            print(f"Script injetado na loja {store_id}")
+        else:
+            print(f"Erro ao injetar script: {res.status_code} - {res.text}")
+    except Exception as e:
+        print(f"Erro ao injetar script: {e}")
 
 
 @router.get("/install")
 def install():
     if not CLIENT_ID:
         return JSONResponse(status_code=500, content={"error": "CLIENT_ID nao configurado"})
-    
     REDIRECT_URI = f"{BACKEND_URL}/auth/callback"
-    
-    # ✅ CORREÇÃO: Adicionado 'read_orders' e 'write_webhooks'
-    scope = "read_products,read_orders,write_scripts,write_content,write_webhooks"
-    
     auth_url = (
         "https://www.nuvemshop.com.br/apps/authorize/"
         f"?client_id={CLIENT_ID}"
         f"&response_type=code"
-        f"&scope={scope}"
+        f"&scope=read_products,write_scripts,write_content,write_webhooks"
         f"&redirect_uri={REDIRECT_URI}"
     )
     return RedirectResponse(auth_url, status_code=303)
@@ -211,6 +228,7 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         return RedirectResponse(f"{FRONTEND_URL}?error=no_code")
 
     try:
+        # 1. Troca CODE por TOKEN
         payload = {
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
@@ -220,16 +238,22 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
         res = requests.post("https://www.nuvemshop.com.br/apps/authorize/token", json=payload)
 
         if res.status_code != 200:
-            return JSONResponse(status_code=400, content={"error": "Falha na autenticacao"})
+            print(f"Erro Nuvemshop ({res.status_code}): {res.text}")
+            return JSONResponse(status_code=400, content={"error": "Falha na autenticacao", "details": res.text})
 
         data = res.json()
+        if "user_id" not in data or "access_token" not in data:
+            return JSONResponse(status_code=400, content={"error": "Resposta invalida da Nuvemshop"})
+
         store_id = str(data["user_id"])
         raw_token = data["access_token"]
+        print(f"Loja autenticada: {store_id}")
 
-        # Busca info da loja
+        # 2. Busca info da loja
         store_url = ""
         store_domain = ""
         store_name = "Minha Loja"
+        email = ""
         try:
             r = requests.get(
                 f"https://api.tiendanube.com/v1/{store_id}/store",
@@ -238,59 +262,98 @@ def callback(code: str = Query(None), db: Session = Depends(get_db)):
             if r.status_code == 200:
                 info = r.json()
                 store_url = info.get("url_with_protocol") or f"https://{info.get('main_domain')}"
-                store_domain = info.get("main_domain")
+                store_domain = info.get("main_domain") or store_url.replace("https://", "")
+                email = info.get("email") or ""
                 name_field = info.get("name")
-                store_name = name_field.get("pt") if isinstance(name_field, dict) else name_field
-        except Exception:
-            pass
+                if isinstance(name_field, dict):
+                    store_name = name_field.get("pt") or name_field.get("es") or "Minha Loja"
+                elif isinstance(name_field, str):
+                    store_name = name_field
+        except Exception as e:
+            print(f"Falha ao obter detalhes da loja: {e}")
 
-        # Salva no Banco
+        # 3. Salva no Banco
         encrypted = encrypt_token(raw_token)
         loja = db.query(Loja).filter(Loja.store_id == store_id).first()
         if not loja:
-            loja = Loja(store_id=store_id, access_token=encrypted, url=store_url)
+            loja = Loja(store_id=store_id, access_token=encrypted, url=store_url, email=email)
             db.add(loja)
         else:
             loja.access_token = encrypted
+            loja.url = store_url
+            if email:
+                loja.email = email
 
         config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
         is_new_store = config is None
         if not config:
-            config = AppConfig(store_id=store_id, app_name=store_name)
+            config = AppConfig(store_id=store_id, app_name=store_name, theme_color="#000000")
             db.add(config)
 
         db.commit()
+        db.refresh(config)
 
-        # OneSignal
+        # 4. Cria app OneSignal se necessario
         if is_new_store or not config.onesignal_app_id:
+            print(f"Criando app OneSignal para loja {store_id}...")
             os_result = criar_app_onesignal_sync(store_id, store_domain, store_name)
             if os_result.get("onesignal_app_id"):
                 config.onesignal_app_id = os_result["onesignal_app_id"]
                 config.onesignal_api_key = os_result["onesignal_api_key"]
                 db.commit()
+                print(f"OneSignal salvo para loja {store_id}")
+        else:
+            print(f"Loja {store_id} ja tem OneSignal: {config.onesignal_app_id}")
 
-        # Webhooks
+        # 5. Registra webhooks automaticamente para esta loja
+        print(f"Registrando webhooks para loja {store_id}...")
         registrar_webhooks_nuvemshop(store_id, raw_token)
-        
-        # Scripts e Paginas
-        inject_script_tag(store_id, raw_token)
+
+        # 6. Pos-install
         create_landing_page_internal(store_id, raw_token, "#000000")
 
+        # 7. Redireciona para o Painel
         jwt_token = create_jwt_token(store_id)
         return RedirectResponse(f"{FRONTEND_URL}/admin?token={jwt_token}", status_code=303)
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": "Erro Interno", "msg": str(e)})
+
 
 @router.get("/auth/callback")
 def auth_callback_alias(code: str = Query(None), db: Session = Depends(get_db)):
     return callback(code=code, db=db)
 
+
+@router.get("/force-page")
+def force_page(token: str):
+    return {"msg": "Use /auth/force-page-real?store_id=X&token=Y"}
+
+
+@router.get("/force-page-real")
+def force_page_real(store_id: str, token: str):
+    create_landing_page_internal(store_id, token, "#000000")
+    return {"status": "Tentativa feita. Olhe os logs do terminal."}
+
+
+# ✅ Rota de reregistro manual de webhooks (util para lojas antigas)
 @router.get("/admin/reregister-webhooks")
 def reregister_webhooks(store_id: str, db: Session = Depends(get_db)):
+    """
+    Registra/atualiza webhooks para uma loja ja existente.
+    Util para lojas instaladas antes dessa funcionalidade existir.
+    Chame via: /admin/reregister-webhooks?store_id=6913785
+    """
     loja = db.query(Loja).filter(Loja.store_id == store_id).first()
-    if not loja: return {"error": "Loja nao encontrada"}
+    if not loja:
+        return {"error": "Loja nao encontrada"}
+
     from app.auth import decrypt_token
     raw_token = decrypt_token(loja.access_token)
+    if not raw_token:
+        return {"error": "Token invalido"}
+
     registrar_webhooks_nuvemshop(store_id, raw_token)
-    return {"status": "ok", "message": "Tentativa de registro concluida. Veja os logs."}
+    return {"status": "ok", "store_id": store_id, "message": "Webhooks registrados. Verifique os logs."}
