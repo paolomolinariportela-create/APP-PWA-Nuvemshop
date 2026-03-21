@@ -98,14 +98,13 @@ self.addEventListener('fetch', (event) => {
     if (acceptHeader.includes('text/html')) return;
     if (
         req.url.includes('/manifest') ||
-        req.url.endsWith('.js') ||
+        (req.url.endsWith('.js') && !req.url.includes('service-worker') && !req.url.includes('OneSignalSDK')) ||
         req.url.endsWith('.css') ||
         req.url.endsWith('.png') ||
         req.url.endsWith('.jpg') ||
         req.url.endsWith('.jpeg') ||
         req.url.endsWith('.svg') ||
-        req.url.endsWith('.ico') ||
-        req.url.includes('/service-worker.js')
+        req.url.endsWith('.ico')
     ) {
         event.respondWith(
             caches.match(req).then((cachedResponse) => {
