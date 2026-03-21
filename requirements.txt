@@ -11,3 +11,4 @@ PyJWT
 cryptography
 python-jose[cryptography]
 openai
+apscheduler
