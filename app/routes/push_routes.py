@@ -1,177 +1,100 @@
 import os
-import json
-from fastapi import APIRouter, Depends, Request
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic import BaseModel
-from pywebpush import webpush, WebPushException
 
 from app.database import get_db
-from app.models import PushSubscription, PushHistory, Loja
+from app.models import PushHistory, AppConfig
 from app.auth import get_current_store
-# from app.security import validate_proxy_hmac  # não usado aqui
 
 router = APIRouter(prefix="/push", tags=["Push"])
-
-# CONFIGURAÇÃO VAPID
-VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
-VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
-raw_claims = os.getenv("VAPID_CLAIMS", '{"sub": "mailto:admin@seuapp.com"}')
-try:
-    VAPID_CLAIMS = json.loads(raw_claims)
-except:
-    VAPID_CLAIMS = {"sub": "mailto:admin@seuapp.com"}
-
-
-class PushSubscribePayload(BaseModel):
-    store_id: str
-    subscription: Dict[str, Any]
-    visitor_id: Optional[str] = None
 
 
 class PushSendPayload(BaseModel):
     title: str
     message: str
     url: Optional[str] = "/"
-    icon: Optional[str] = "/icon.png"
+    icon: Optional[str] = None
 
 
-def send_webpush(subscription_info, message_body):
-    try:
-        if not VAPID_PRIVATE_KEY:
-            return False
-        webpush(
-            subscription_info=subscription_info,
-            data=json.dumps(message_body),
-            vapid_private_key=VAPID_PRIVATE_KEY,
-            vapid_claims=VAPID_CLAIMS,
+def get_onesignal_credentials(store_id: str, db: Session):
+    """Busca appId e apiKey do OneSignal para a loja."""
+    config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    if not config:
+        return None, None
+    return (
+        getattr(config, "onesignal_app_id", None),
+        getattr(config, "onesignal_api_key", None),
+    )
+
+
+async def send_onesignal_push(
+    app_id: str,
+    api_key: str,
+    title: str,
+    message: str,
+    url: str,
+    icon: Optional[str] = None,
+) -> dict:
+    """
+    Envia push para todos os subscribers da loja via API REST do OneSignal.
+    Docs: https://documentation.onesignal.com/reference/create-notification
+    """
+    headers = {
+        "Authorization": f"Basic {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "app_id": app_id,
+        "included_segments": ["Total Subscriptions"],
+        "headings": {"en": title, "pt": title},
+        "contents": {"en": message, "pt": message},
+        "url": url,
+    }
+
+    if icon:
+        payload["chrome_web_icon"] = icon
+        payload["firefox_icon"] = icon
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers=headers,
+            json=payload,
         )
-        return True
-    except WebPushException as ex:
-        if ex.response and ex.response.status_code == 410:
-            return "DELETE"
-        return False
-
-
-@router.post("/subscribe")
-async def subscribe_push(
-    payload: PushSubscribePayload,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        raw_body = await request.body()
-        print("=== PUSH SUBSCRIBE: CHAMADO ===")
-        print("RAW BODY:", raw_body)
-        print("PARSED PAYLOAD:", payload.dict())
-
-        sub_data = payload.subscription
-        endpoint = sub_data.get("endpoint")
-        keys = sub_data.get("keys", {})
-
-        print("ENDPOINT:", endpoint)
-        print("KEYS:", keys)
-
-        if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
-            print("ERRO: dados incompletos de subscription")
-            return {"status": "error"}
-
-        exists = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.endpoint == endpoint)
-            .first()
-        )
-        if not exists:
-            print("NOVO ENDPOINT, salvando no banco")
-            db.add(
-                PushSubscription(
-                    store_id=payload.store_id,
-                    visitor_id=payload.visitor_id,
-                    endpoint=endpoint,
-                    p256dh=keys.get("p256dh"),
-                    auth=keys.get("auth"),
-                    created_at=datetime.now().isoformat(),
-                )
-            )
-            db.commit()
-            print("SALVO COM SUCESSO")
-            return {"status": "subscribed"}
-
-        print("ENDPOINT JÁ EXISTE, não salva de novo")
-        return {"status": "already_subscribed"}
-
-    except Exception as e:
-        print("EXCEPTION EM /push/subscribe:", e)
-        return {"status": "error"}
-
-        exists = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.endpoint == endpoint)
-            .first()
-        )
-        if not exists:
-            print("PUSH SUBSCRIBE: novo endpoint, salvando no banco")
-            db.add(
-                PushSubscription(
-                    store_id=payload.store_id,
-                    visitor_id=payload.visitor_id,
-                    endpoint=endpoint,
-                    p256dh=keys.get("p256dh"),
-                    auth=keys.get("auth"),
-                    created_at=datetime.now().isoformat(),
-                )
-            )
-            db.commit()
-            print("PUSH SUBSCRIBE: salvo com sucesso")
-            return {"status": "subscribed"}
-
-        print("PUSH SUBSCRIBE: já existente, não salva de novo")
-        return {"status": "already_subscribed"}
-
-    except Exception as e:
-        print("PUSH SUBSCRIBE EXCEPTION:", e)
-        return {"status": "error"}
+        return response.json()
 
 
 @router.post("/send")
-def send_push_campaign(
+async def send_push_campaign(
     payload: PushSendPayload,
     store_id: str = Depends(get_current_store),
     db: Session = Depends(get_db),
 ):
-    subs = (
-        db.query(PushSubscription)
-        .filter(PushSubscription.store_id == store_id)
-        .all()
-    )
-    message_body = {
-        "title": payload.title,
-        "body": payload.message,
-        "url": payload.url,
-        "icon": payload.icon,
-    }
-    sent_count = 0
-    delete_ids = []
+    app_id, api_key = get_onesignal_credentials(store_id, db)
 
-    if subs:
-        for sub in subs:
-            res = send_webpush(
-                {
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
-                message_body,
-            )
-            if res is True:
-                sent_count += 1
-            elif res == "DELETE":
-                delete_ids.append(sub.id)
-        if delete_ids:
-            db.query(PushSubscription).filter(
-                PushSubscription.id.in_(delete_ids)
-            ).delete(synchronize_session=False)
-            db.commit()
+    if not app_id or not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="OneSignal não configurado para esta loja. Configure o App ID e API Key no painel.",
+        )
+
+    result = await send_onesignal_push(
+        app_id=app_id,
+        api_key=api_key,
+        title=payload.title,
+        message=payload.message,
+        url=payload.url,
+        icon=payload.icon,
+    )
+
+    # Salva histórico
+    sent_count = result.get("recipients", 0)
+    error = result.get("errors")
 
     db.add(
         PushHistory(
@@ -184,7 +107,19 @@ def send_push_campaign(
         )
     )
     db.commit()
-    return {"status": "success", "sent": sent_count, "cleaned": len(delete_ids)}
+
+    if error:
+        return {
+            "status": "error",
+            "detail": error,
+            "onesignal_response": result,
+        }
+
+    return {
+        "status": "success",
+        "sent": sent_count,
+        "notification_id": result.get("id"),
+    }
 
 
 @router.get("/history")
@@ -198,3 +133,31 @@ def get_push_history(
         .order_by(PushHistory.id.desc())
         .all()
     )
+
+
+@router.get("/subscribers/count")
+async def get_subscribers_count(
+    store_id: str = Depends(get_current_store),
+    db: Session = Depends(get_db),
+):
+    """Retorna contagem de subscribers ativos via API do OneSignal."""
+    app_id, api_key = get_onesignal_credentials(store_id, db)
+
+    if not app_id or not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="OneSignal não configurado para esta loja.",
+        )
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"https://onesignal.com/api/v1/apps/{app_id}",
+            headers={"Authorization": f"Basic {api_key}"},
+        )
+        data = response.json()
+
+    return {
+        "subscribers": data.get("players", 0),
+        "active_subscribers": data.get("messageable_players", 0),
+        "app_id": app_id,
+    }
