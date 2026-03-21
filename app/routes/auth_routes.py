@@ -73,11 +73,11 @@ def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
 
     # Eventos de pedido que queremos monitorar
     eventos = [
-        "order/paid",
-        "order/packed",
-        "order/shipped",
-        "order/delivered",
-        "order/cancelled",
+        "orders/paid",
+        "orders/packed",
+        "orders/shipped",
+        "orders/delivered",
+        "orders/cancelled",
     ]
 
     headers = {
@@ -217,7 +217,7 @@ def install():
         "https://www.nuvemshop.com.br/apps/authorize/"
         f"?client_id={CLIENT_ID}"
         f"&response_type=code"
-        f"&scope=read_products,write_scripts,write_content"
+        f"&scope=read_products,write_scripts,write_content,write_webhooks"
         f"&redirect_uri={REDIRECT_URI}"
     )
     return RedirectResponse(auth_url, status_code=303)
