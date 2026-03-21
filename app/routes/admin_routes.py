@@ -136,7 +136,6 @@ def get_config(
         "popup_image_url": getattr(config, "popup_image_url", "") or "",
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
         "bottom_bar_icon_color": getattr(config, "bottom_bar_icon_color", "#6B7280") or "#6B7280",
-        # ✅ OneSignal
         "onesignal_app_id": getattr(config, "onesignal_app_id", "") or "",
         "onesignal_api_key": getattr(config, "onesignal_api_key", "") or "",
     }
@@ -230,3 +229,26 @@ def manual_create_page(
         return {"error": "Loja não encontrada"}
     create_landing_page_internal(store_id, loja.access_token, payload.theme_color)
     return {"status": "success"}
+
+
+# ✅ ROTA TEMPORÁRIA — salva API Key do OneSignal direto no banco
+# Remove após confirmar que o token está sendo gerado corretamente
+@router.get("/fix-onesignal")
+def fix_onesignal(
+    store_id: str,
+    app_id: str,
+    api_key: str,
+    db: Session = Depends(get_db),
+):
+    config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
+    if not config:
+        return {"error": "Loja não encontrada"}
+    config.onesignal_app_id = app_id
+    config.onesignal_api_key = api_key
+    db.commit()
+    return {
+        "status": "ok",
+        "store_id": store_id,
+        "app_id": app_id,
+        "api_key_preview": api_key[:20] + "...",
+    }
