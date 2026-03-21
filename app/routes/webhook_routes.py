@@ -24,14 +24,9 @@ MENSAGENS_AUTOMATICAS = {
         "message": "{nome}, seu pedido #{pedido} esta embalado e pronto! Em breve a transportadora fara a coleta.",
         "url": "/minha-conta",
     },
-    "order/shipped": {
+    "order/fulfilled": {
         "title": "Seu pedido esta a caminho!",
         "message": "Saiu! Seu pedido #{pedido} foi enviado e em breve estara em suas maos, {nome}.",
-        "url": "/minha-conta",
-    },
-    "order/delivered": {
-        "title": "Pedido entregue!",
-        "message": "Que alegria! Seu pedido #{pedido} chegou, {nome}. Esperamos que voce adore sua compra!",
         "url": "/minha-conta",
     },
     "order/cancelled": {
@@ -43,8 +38,9 @@ MENSAGENS_AUTOMATICAS = {
 
 STATUS_ALIAS = {
     "packed":    "order/packed",
-    "shipped":   "order/shipped",
-    "delivered": "order/delivered",
+    "fulfilled": "order/fulfilled",
+    "shipped":   "order/fulfilled",
+    "delivered": "order/fulfilled",
     "cancelled": "order/cancelled",
     "paid":      "order/paid",
     "open":      None,
