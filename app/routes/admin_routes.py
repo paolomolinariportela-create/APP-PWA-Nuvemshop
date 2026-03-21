@@ -24,8 +24,8 @@ class ConfigPayload(BaseModel):
     fab_icon: Optional[str] = "📲"
     fab_delay: Optional[int] = 0
     fab_color: Optional[str] = "#2563EB"
-    fab_size: Optional[str] = "medium"  # xs, small, medium, large, xl
-    fab_background_image_url: Optional[str] = None  # imagem de fundo do FAB
+    fab_size: Optional[str] = "medium"
+    fab_background_image_url: Optional[str] = None
 
     # Barra / banner (top/bottom)
     topbar_enabled: Optional[bool] = False
@@ -35,10 +35,10 @@ class ConfigPayload(BaseModel):
     topbar_position: Optional[str] = "bottom"
     topbar_color: Optional[str] = "#111827"
     topbar_text_color: Optional[str] = "#FFFFFF"
-    topbar_size: Optional[str] = "medium"  # xs, small, medium, large, xl
+    topbar_size: Optional[str] = "medium"
     topbar_button_bg_color: Optional[str] = "#FBBF24"
     topbar_button_text_color: Optional[str] = "#111827"
-    topbar_background_image_url: Optional[str] = None  # imagem de fundo da barra fixa
+    topbar_background_image_url: Optional[str] = None
 
     # Popup de instalação
     popup_enabled: Optional[bool] = False
@@ -47,6 +47,10 @@ class ConfigPayload(BaseModel):
     # Bottom bar (app instalado)
     bottom_bar_bg: Optional[str] = "#FFFFFF"
     bottom_bar_icon_color: Optional[str] = "#6B7280"
+
+    # ✅ OneSignal — multi-tenant
+    onesignal_app_id: Optional[str] = None
+    onesignal_api_key: Optional[str] = None
 
 
 def _normalize_fab_size(size: str | None) -> str:
@@ -72,13 +76,11 @@ def get_config(
 ):
     config = db.query(AppConfig).filter(AppConfig.store_id == store_id).first()
     if not config:
-        # Retorna padrão se não existir
         return {
             "app_name": "Minha Loja",
             "theme_color": "#000000",
             "logo_url": "",
             "whatsapp": "",
-
             "fab_enabled": False,
             "fab_text": "Baixar App",
             "fab_position": "right",
@@ -87,7 +89,6 @@ def get_config(
             "fab_color": "#2563EB",
             "fab_size": "medium",
             "fab_background_image_url": "",
-
             "topbar_enabled": False,
             "topbar_text": "Baixe nosso app",
             "topbar_button_text": "Baixar",
@@ -99,12 +100,12 @@ def get_config(
             "topbar_button_bg_color": "#FBBF24",
             "topbar_button_text_color": "#111827",
             "topbar_background_image_url": "",
-
             "popup_enabled": False,
             "popup_image_url": "",
-
             "bottom_bar_bg": "#FFFFFF",
             "bottom_bar_icon_color": "#6B7280",
+            "onesignal_app_id": "",
+            "onesignal_api_key": "",
         }
 
     return {
@@ -112,8 +113,6 @@ def get_config(
         "theme_color": config.theme_color or "#000000",
         "logo_url": config.logo_url or "",
         "whatsapp": config.whatsapp_number or "",
-
-        # FAB
         "fab_enabled": config.fab_enabled,
         "fab_text": config.fab_text or "Baixar App",
         "fab_position": config.fab_position or "right",
@@ -121,11 +120,7 @@ def get_config(
         "fab_delay": config.fab_delay or 0,
         "fab_color": getattr(config, "fab_color", "#2563EB") or "#2563EB",
         "fab_size": getattr(config, "fab_size", "medium") or "medium",
-        "fab_background_image_url": getattr(
-            config, "fab_background_image_url", ""
-        ) or "",
-
-        # Topbar
+        "fab_background_image_url": getattr(config, "fab_background_image_url", "") or "",
         "topbar_enabled": getattr(config, "topbar_enabled", False),
         "topbar_text": getattr(config, "topbar_text", "Baixe nosso app") or "Baixe nosso app",
         "topbar_button_text": getattr(config, "topbar_button_text", "Baixar") or "Baixar",
@@ -134,25 +129,16 @@ def get_config(
         "topbar_color": getattr(config, "topbar_color", "#111827") or "#111827",
         "topbar_text_color": getattr(config, "topbar_text_color", "#FFFFFF") or "#FFFFFF",
         "topbar_size": getattr(config, "topbar_size", "medium") or "medium",
-        "topbar_button_bg_color": getattr(
-            config, "topbar_button_bg_color", "#FBBF24"
-        ) or "#FBBF24",
-        "topbar_button_text_color": getattr(
-            config, "topbar_button_text_color", "#111827"
-        ) or "#111827",
-        "topbar_background_image_url": getattr(
-            config, "topbar_background_image_url", ""
-        ) or "",
-
-        # Popup
+        "topbar_button_bg_color": getattr(config, "topbar_button_bg_color", "#FBBF24") or "#FBBF24",
+        "topbar_button_text_color": getattr(config, "topbar_button_text_color", "#111827") or "#111827",
+        "topbar_background_image_url": getattr(config, "topbar_background_image_url", "") or "",
         "popup_enabled": getattr(config, "popup_enabled", False),
         "popup_image_url": getattr(config, "popup_image_url", "") or "",
-
-        # Bottom bar
         "bottom_bar_bg": getattr(config, "bottom_bar_bg", "#FFFFFF") or "#FFFFFF",
-        "bottom_bar_icon_color": getattr(
-            config, "bottom_bar_icon_color", "#6B7280"
-        ) or "#6B7280",
+        "bottom_bar_icon_color": getattr(config, "bottom_bar_icon_color", "#6B7280") or "#6B7280",
+        # ✅ OneSignal
+        "onesignal_app_id": getattr(config, "onesignal_app_id", "") or "",
+        "onesignal_api_key": getattr(config, "onesignal_api_key", "") or "",
     }
 
 
@@ -170,12 +156,9 @@ def get_store_info(
         sync_store_logo_from_nuvemshop(db, loja)
         print("[STORE-INFO] Depois do sync, logo_url:", loja.logo_url)
 
-    store_url = loja.url or ""
-    logo_url = getattr(loja, "logo_url", None)
-
     return {
-        "url": store_url,
-        "logo_url": logo_url or "",
+        "url": loja.url or "",
+        "logo_url": getattr(loja, "logo_url", None) or "",
     }
 
 
@@ -195,7 +178,7 @@ def save_config(
     config.logo_url = payload.logo_url
     config.whatsapp_number = payload.whatsapp
 
-    # Widgets FAB
+    # FAB
     config.fab_enabled = payload.fab_enabled
     config.fab_text = payload.fab_text
     config.fab_position = payload.fab_position
@@ -205,7 +188,7 @@ def save_config(
     config.fab_size = _normalize_fab_size(payload.fab_size)
     config.fab_background_image_url = payload.fab_background_image_url
 
-    # Topbar / banner
+    # Topbar
     config.topbar_enabled = payload.topbar_enabled
     config.topbar_text = payload.topbar_text
     config.topbar_button_text = payload.topbar_button_text
@@ -225,6 +208,12 @@ def save_config(
     # Bottom bar
     config.bottom_bar_bg = payload.bottom_bar_bg
     config.bottom_bar_icon_color = payload.bottom_bar_icon_color
+
+    # ✅ OneSignal
+    if payload.onesignal_app_id is not None:
+        config.onesignal_app_id = payload.onesignal_app_id
+    if payload.onesignal_api_key is not None:
+        config.onesignal_api_key = payload.onesignal_api_key
 
     db.commit()
     return {"status": "success"}
