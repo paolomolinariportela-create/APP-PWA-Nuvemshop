@@ -2,7 +2,6 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import Response
 
 from app.database import engine, Base
 
@@ -21,17 +20,14 @@ def get_db_url():
 def ensure_app_config_table_and_columns():
     db_url = get_db_url()
     if not db_url:
-        print("[DB MIGRATION] DATABASE_URL não encontrado nas variáveis de ambiente.")
+        print("[DB MIGRATION] DATABASE_URL nao encontrado.")
         return
 
     conn = psycopg2.connect(db_url)
     conn.autocommit = True
     cur = conn.cursor()
-
     print("[DB MIGRATION] Verificando tabela app_config...")
-
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS app_config (
             id SERIAL PRIMARY KEY,
             store_id VARCHAR(255) NOT NULL UNIQUE,
@@ -40,8 +36,7 @@ def ensure_app_config_table_and_columns():
             logo_url TEXT,
             whatsapp_number VARCHAR(50)
         );
-    """
-    )
+    """)
 
     desired_columns = {
         "fab_position": "VARCHAR",
@@ -72,14 +67,10 @@ def ensure_app_config_table_and_columns():
         "onesignal_api_key": "VARCHAR(200)",
     }
 
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'app_config'
-          AND table_schema = 'public';
-    """
-    )
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'app_config' AND table_schema = 'public';
+    """)
     existing_cols = {row[0] for row in cur.fetchall()}
 
     for col_name, col_type in desired_columns.items():
@@ -87,13 +78,11 @@ def ensure_app_config_table_and_columns():
             alter_stmt = sql.SQL(
                 "ALTER TABLE app_config ADD COLUMN {name} {ctype};"
             ).format(name=sql.Identifier(col_name), ctype=sql.SQL(col_type))
-            print(f"[DB MIGRATION] Adicionando coluna: {col_name} ({col_type})")
+            print(f"[DB MIGRATION] Adicionando coluna: {col_name}")
             try:
                 cur.execute(alter_stmt)
             except Exception as e:
                 print(f"[DB MIGRATION] Erro ao adicionar coluna {col_name}: {e}")
-        else:
-            print(f"[DB MIGRATION] Coluna já existe: {col_name}")
 
     cur.close()
     conn.close()
@@ -103,51 +92,35 @@ def ensure_app_config_table_and_columns():
 def ensure_lojas_logo_column():
     db_url = get_db_url()
     if not db_url:
-        print("[DB MIGRATION] DATABASE_URL não encontrado nas variáveis de ambiente.")
         return
 
     conn = psycopg2.connect(db_url)
     conn.autocommit = True
     cur = conn.cursor()
 
-    print("[DB MIGRATION] Verificando coluna logo_url em lojas...")
-
-    cur.execute(
-        """
+    cur.execute("""
         SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_name = 'lojas'
-              AND table_schema = 'public'
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'lojas' AND table_schema = 'public'
         );
-    """
-    )
-    exists = cur.fetchone()[0]
-    if not exists:
-        print("[DB MIGRATION] Tabela lojas não existe, nada a fazer.")
+    """)
+    if not cur.fetchone()[0]:
         cur.close()
         conn.close()
         return
 
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'lojas'
-          AND table_schema = 'public';
-    """
-    )
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'lojas' AND table_schema = 'public';
+    """)
     existing_cols = {row[0] for row in cur.fetchall()}
 
     if "logo_url" not in existing_cols:
-        print("[DB MIGRATION] Adicionando coluna logo_url em lojas...")
         try:
             cur.execute("ALTER TABLE lojas ADD COLUMN logo_url VARCHAR;")
-            print("[DB MIGRATION] Coluna logo_url criada com sucesso.")
+            print("[DB MIGRATION] Coluna logo_url criada em lojas.")
         except Exception as e:
-            print(f"[DB MIGRATION] Erro ao adicionar coluna logo_url: {e}")
-    else:
-        print("[DB MIGRATION] Coluna logo_url já existe em lojas.")
+            print(f"[DB MIGRATION] Erro ao adicionar logo_url: {e}")
 
     cur.close()
     conn.close()
@@ -168,15 +141,16 @@ from app.routes import (
     analytics_routes,
     pwa_routes,
     stats_routes,
+    webhook_routes,
 )
 
-# Migrações + criação de tabelas
+# Migracoes + criacao de tabelas
 run_all_migrations()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="App Builder Pro API",
-    description="API Modular para criação de PWAs, Push Notifications e Analytics.",
+    description="API Modular para criacao de PWAs, Push Notifications e Analytics.",
     version="2.0.0",
 )
 
@@ -188,7 +162,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Todas as rotas ANTES do StaticFiles
+# Todas as rotas ANTES do StaticFiles
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(loader_routes.router, tags=["Loader"])
@@ -196,6 +170,7 @@ app.include_router(push_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(pwa_routes.router, tags=["PWA"])
 app.include_router(stats_routes.router)
+app.include_router(webhook_routes.router)
 
 
 @app.get("/health", tags=["System"])
@@ -203,7 +178,7 @@ def health_check():
     return {"status": "Online", "service": "App Builder Pro - Modular API"}
 
 
-# ✅ Frontend estático — SEMPRE por último
+# Frontend estatico — SEMPRE por ultimo
 frontend_path = None
 if os.path.exists("frontend/dist"):
     frontend_path = "frontend/dist"
@@ -212,6 +187,6 @@ elif os.path.exists("dist"):
 
 if frontend_path:
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-    print(f"✅ Frontend servido de: {frontend_path}")
+    print(f"Frontend servido de: {frontend_path}")
 else:
-    print("⚠️ Aviso: Pasta do Frontend não encontrada (API rodando em modo headless)")
+    print("Aviso: Frontend nao encontrado (modo headless)")
