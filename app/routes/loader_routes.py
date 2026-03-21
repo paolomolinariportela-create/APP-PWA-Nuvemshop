@@ -474,6 +474,17 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 }});
             }}
 
+            // ✅ Registra SW manualmente via proxy antes do OneSignal init
+            if ('serviceWorker' in navigator) {{
+                navigator.serviceWorker.register('/apps/app-builder/service-worker.js', {{ scope: '/apps/app-builder/' }})
+                    .then(function(reg) {{
+                        pwaLog('✅ SW registrado manualmente: ' + reg.scope);
+                    }})
+                    .catch(function(err) {{
+                        pwaLog('❌ SW registro manual erro: ' + err.message);
+                    }});
+            }}
+
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             window.OneSignalDeferred.push(async function(OneSignal) {{
                 try {{
