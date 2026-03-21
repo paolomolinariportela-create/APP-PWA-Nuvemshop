@@ -14,27 +14,27 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 # Futuramente: buscar do banco por loja (aba Automacoes)
 # =============================================
 MENSAGENS_AUTOMATICAS = {
-    "orders/paid": {
+    "order/paid": {
         "title": "Pagamento Confirmado!",
         "message": "Ola, {nome}! Recebemos seu pagamento do pedido #{pedido}. Ja estamos preparando tudo com carinho!",
         "url": "/minha-conta",
     },
-    "orders/packed": {
+    "order/packed": {
         "title": "Pedido Embalado!",
         "message": "{nome}, seu pedido #{pedido} esta embalado e pronto! Em breve a transportadora fara a coleta.",
         "url": "/minha-conta",
     },
-    "orders/shipped": {
+    "order/shipped": {
         "title": "Seu pedido esta a caminho!",
         "message": "Saiu! Seu pedido #{pedido} foi enviado e em breve estara em suas maos, {nome}.",
         "url": "/minha-conta",
     },
-    "orders/delivered": {
+    "order/delivered": {
         "title": "Pedido entregue!",
         "message": "Que alegria! Seu pedido #{pedido} chegou, {nome}. Esperamos que voce adore sua compra!",
         "url": "/minha-conta",
     },
-    "orders/cancelled": {
+    "order/cancelled": {
         "title": "Pedido Cancelado",
         "message": "{nome}, infelizmente seu pedido #{pedido} foi cancelado. Clique para ver os detalhes.",
         "url": "/minha-conta",
@@ -42,11 +42,11 @@ MENSAGENS_AUTOMATICAS = {
 }
 
 STATUS_ALIAS = {
-    "packed":    "orders/packed",
-    "shipped":   "orders/shipped",
-    "delivered": "orders/delivered",
-    "cancelled": "orders/cancelled",
-    "paid":      "orders/paid",
+    "packed":    "order/packed",
+    "shipped":   "order/shipped",
+    "delivered": "order/delivered",
+    "cancelled": "order/cancelled",
+    "paid":      "order/paid",
     "open":      None,
     "pending":   None,
     "voided":    None,
