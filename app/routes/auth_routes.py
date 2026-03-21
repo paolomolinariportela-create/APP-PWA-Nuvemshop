@@ -73,11 +73,11 @@ def registrar_webhooks_nuvemshop(store_id: str, access_token: str):
 
     # Eventos de pedido que queremos monitorar
     eventos = [
-        "orders/paid",
-        "orders/packed",
-        "orders/shipped",
-        "orders/delivered",
-        "orders/cancelled",
+        "order/paid",
+        "order/packed",
+        "order/shipped",
+        "order/delivered",
+        "order/cancelled",
     ]
 
     headers = {
