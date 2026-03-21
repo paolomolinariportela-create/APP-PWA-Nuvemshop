@@ -14,46 +14,39 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 # Futuramente: buscar do banco por loja (aba Automacoes)
 # =============================================
 MENSAGENS_AUTOMATICAS = {
-    "order/paid": {
+    "orders/paid": {
         "title": "Pagamento Confirmado!",
         "message": "Ola, {nome}! Recebemos seu pagamento do pedido #{pedido}. Ja estamos preparando tudo com carinho!",
         "url": "/minha-conta",
     },
-    "order/packed": {
+    "orders/packed": {
         "title": "Pedido Embalado!",
         "message": "{nome}, seu pedido #{pedido} esta embalado e pronto! Em breve a transportadora fara a coleta.",
         "url": "/minha-conta",
     },
-    "order/shipped": {
+    "orders/shipped": {
         "title": "Seu pedido esta a caminho!",
         "message": "Saiu! Seu pedido #{pedido} foi enviado e em breve estara em suas maos, {nome}.",
         "url": "/minha-conta",
     },
-    "order/delivered": {
+    "orders/delivered": {
         "title": "Pedido entregue!",
         "message": "Que alegria! Seu pedido #{pedido} chegou, {nome}. Esperamos que voce adore sua compra!",
         "url": "/minha-conta",
     },
-    "order/cancelled": {
+    "orders/cancelled": {
         "title": "Pedido Cancelado",
         "message": "{nome}, infelizmente seu pedido #{pedido} foi cancelado. Clique para ver os detalhes.",
         "url": "/minha-conta",
     },
-    # Alias para eventos que a Nuvemshop pode enviar com status direto
-    "packed":    None,
-    "shipped":   None,
-    "delivered": None,
-    "cancelled": None,
-    "paid":      None,
 }
 
-# Mapeamento de status simples para chave do dicionario
 STATUS_ALIAS = {
-    "packed":    "order/packed",
-    "shipped":   "order/shipped",
-    "delivered": "order/delivered",
-    "cancelled": "order/cancelled",
-    "paid":      "order/paid",
+    "packed":    "orders/packed",
+    "shipped":   "orders/shipped",
+    "delivered": "orders/delivered",
+    "cancelled": "orders/cancelled",
+    "paid":      "orders/paid",
     "open":      None,
     "pending":   None,
     "voided":    None,
