@@ -255,7 +255,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 btn.appendChild(text);
                 return btn;
             }}
-            bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z","Início","/"));
+            bar.appendChild(createItem("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z","Inicio","/"));
             bar.appendChild(createItem("M7 18c-1.1 0-2-.9-2-2V6h14v10c0 1.1-.9 2-2 2H7zm0-2h10V8H7v8zM9 4V2h6v2h5v2H4V4h5z","Loja","/produtos"));
             bar.appendChild(createItem("M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-1.5 1.5v.5h15v-.5L18 16z","Alertas","/notificacoes"));
             bar.appendChild(createItem("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z","Conta","/minha-conta"));
@@ -267,7 +267,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
     js = f"""
     (function() {{
 
-        // ✅ Limpa TODOS os SWs antigos na primeira execução
         if ('serviceWorker' in navigator) {{
             navigator.serviceWorker.getRegistrations().then(function(regs) {{
                 regs.forEach(function(r) {{ r.unregister(); }});
@@ -287,9 +286,6 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             window.navigator.standalone === true
         );
 
-        // =============================================
-        // ✅ LOGGER VISUAL — remove após confirmar funcionamento
-        // =============================================
         var logBox = null;
         if (isApp) {{
             logBox = document.createElement('div');
@@ -301,7 +297,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 max-height:220px;overflow-y:auto;
             `;
             var closeLog = document.createElement('button');
-            closeLog.textContent = '✕ fechar log';
+            closeLog.textContent = 'fechar log';
             closeLog.style.cssText = 'display:block;margin-bottom:6px;background:#333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;';
             closeLog.onclick = function() {{ logBox.remove(); }};
             logBox.appendChild(closeLog);
@@ -316,17 +312,16 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             console.log('[PWA] ' + msg);
             if (!logBox) return;
             var line = document.createElement('div');
-            line.textContent = new Date().toLocaleTimeString('pt-BR') + ' › ' + msg;
+            line.textContent = new Date().toLocaleTimeString('pt-BR') + ' - ' + msg;
             logBox.appendChild(line);
             logBox.scrollTop = logBox.scrollHeight;
         }}
 
-        pwaLog('🚀 Loader v8 — diagnóstico optIn');
+        pwaLog('Loader v9 - identity + carrinho');
         pwaLog('isApp: ' + isApp);
         pwaLog('permission: ' + (typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel'));
         pwaLog('notif_asked: ' + localStorage.getItem('notif_asked'));
         pwaLog('onesignal_app_id: {onesignal_app_id or "NAO CONFIGURADO"}');
-        // =============================================
 
         function initMeta() {{
             var link = document.createElement('link');
@@ -370,6 +365,97 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }});
         }}
 
+        // =============================================
+        // IDENTITY — loga o cliente no OneSignal pelo e-mail
+        // Funciona quando a Nuvemshop expoe LS.customer
+        // =============================================
+        function initUserIdentity() {{
+            try {{
+                var email = null;
+                var customerId = null;
+
+                // Tenta pegar via objeto LS da Nuvemshop
+                if (window.LS && window.LS.customer) {{
+                    email = window.LS.customer.email || null;
+                    customerId = window.LS.customer.id ? String(window.LS.customer.id) : null;
+                }}
+
+                // Fallback: tenta pegar do formulario de login/checkout
+                if (!email) {{
+                    var emailInput = document.querySelector('input[type="email"]');
+                    if (emailInput && emailInput.value && emailInput.value.includes('@')) {{
+                        email = emailInput.value.trim();
+                    }}
+                }}
+
+                if (!email && !customerId) {{
+                    pwaLog('Identity: cliente anonimo, nada a logar');
+                    return;
+                }}
+
+                var externalId = email || ('ns_' + customerId);
+                pwaLog('Identity: logando no OneSignal como ' + externalId);
+
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                window.OneSignalDeferred.push(function(OneSignal) {{
+                    OneSignal.login(externalId).then(function() {{
+                        pwaLog('Identity: login OneSignal ok - ' + externalId);
+                        // Salva tags adicionais
+                        if (email) OneSignal.User.addTag("email", email);
+                        if (customerId) OneSignal.User.addTag("customer_id", customerId);
+                    }}).catch(function(e) {{
+                        pwaLog('Identity: erro - ' + e.message);
+                    }});
+                }});
+            }} catch(e) {{
+                pwaLog('Identity erro: ' + e.message);
+            }}
+        }}
+
+        // =============================================
+        // IDENTITY — loga o cliente no OneSignal pelo e-mail
+        // Funciona quando a Nuvemshop expoe LS.customer
+        // =============================================
+        function initUserIdentity() {{
+            try {{
+                var email = null;
+                var customerId = null;
+
+                if (window.LS && window.LS.customer) {{
+                    email = window.LS.customer.email || null;
+                    customerId = window.LS.customer.id ? String(window.LS.customer.id) : null;
+                }}
+
+                if (!email) {{
+                    var emailInput = document.querySelector('input[type="email"]');
+                    if (emailInput && emailInput.value && emailInput.value.includes('@')) {{
+                        email = emailInput.value.trim();
+                    }}
+                }}
+
+                if (!email && !customerId) {{
+                    pwaLog('Identity: cliente anonimo');
+                    return;
+                }}
+
+                var externalId = email || ('ns_' + customerId);
+                pwaLog('Identity: logando como ' + externalId);
+
+                window.OneSignalDeferred = window.OneSignalDeferred || [];
+                window.OneSignalDeferred.push(function(OneSignal) {{
+                    OneSignal.login(externalId).then(function() {{
+                        pwaLog('Identity: ok - ' + externalId);
+                        if (email) OneSignal.User.addTag("email", email);
+                        if (customerId) OneSignal.User.addTag("customer_id", customerId);
+                    }}).catch(function(e) {{
+                        pwaLog('Identity erro: ' + e.message);
+                    }});
+                }});
+            }} catch(e) {{
+                pwaLog('Identity erro: ' + e.message);
+            }}
+        }}
+
         function checkSubStatus() {{
             try {{
                 var subId = window.OneSignal.User.PushSubscription.id;
@@ -384,26 +470,26 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
 
         function initNotificationBar() {{
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {{
-                pwaLog('⚠️ permission=granted — chamando optIn() direto');
+                pwaLog('permission=granted - chamando optIn() direto');
                 window.OneSignal.User.PushSubscription.optIn().then(function() {{
-                    pwaLog('✅ optIn() direto concluído');
+                    pwaLog('optIn() direto concluido');
                     setTimeout(checkSubStatus, 3000);
                 }}).catch(function(e) {{
-                    pwaLog('❌ optIn() direto erro: ' + e.message);
+                    pwaLog('optIn() direto erro: ' + e.message);
                 }});
                 return;
             }}
             if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {{
-                pwaLog('❌ Barra bloqueada: permission=denied');
+                pwaLog('Barra bloqueada: permission=denied');
                 return;
             }}
             if (localStorage.getItem('notif_asked')) {{
-                pwaLog('❌ Barra bloqueada: notif_asked salvo');
+                pwaLog('Barra bloqueada: notif_asked salvo');
                 return;
             }}
             if (document.getElementById('pwa-notification-bar')) return;
 
-            pwaLog('⏳ Barra será exibida em 3s...');
+            pwaLog('Barra sera exibida em 3s...');
             setTimeout(function() {{
                 if (document.getElementById('pwa-notification-bar')) return;
                 var bar = document.createElement('div');
@@ -419,69 +505,66 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 bar.innerHTML = `
                     <style>@keyframes pwaBannerUp{{from{{transform:translateY(30px);opacity:0}}to{{transform:translateY(0);opacity:1}}}}</style>
                     <div style="display:flex;align-items:center;gap:8px;flex:1;">
-                      <span style="font-size:18px;">🔔</span>
-                      <span style="line-height:1.3;">Ative notificações e receba cupons exclusivos!</span>
+                      <span style="font-size:18px;">&#128276;</span>
+                      <span style="line-height:1.3;">Ative notificacoes e receba cupons exclusivos!</span>
                     </div>
                     <div style="display:flex;gap:6px;margin-left:10px;">
                       <button id="pwa-notif-allow" style="padding:7px 12px;border-radius:8px;border:none;background:#22C55E;color:#fff;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap;">Ativar</button>
-                      <button id="pwa-notif-close" style="padding:7px 8px;border-radius:8px;border:none;background:transparent;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;">✕</button>
+                      <button id="pwa-notif-close" style="padding:7px 8px;border-radius:8px;border:none;background:transparent;color:#9CA3AF;font-size:18px;line-height:1;cursor:pointer;">x</button>
                     </div>
                 `;
                 document.body.appendChild(bar);
-                pwaLog('✅ Barra exibida!');
+                pwaLog('Barra exibida!');
 
                 document.getElementById('pwa-notif-allow').onclick = function() {{
                     localStorage.setItem('notif_asked', '1');
                     bar.remove();
-                    pwaLog('🔔 Chamando optIn()...');
+                    pwaLog('Chamando optIn()...');
                     window.OneSignal.User.PushSubscription.optIn().then(function() {{
-                        pwaLog('✅ optIn() concluído');
-                        // ✅ Verifica subscription 3s após optIn
+                        pwaLog('optIn() concluido');
                         setTimeout(checkSubStatus, 3000);
                     }}).catch(function(e) {{
-                        pwaLog('❌ optIn() erro: ' + e.message);
+                        pwaLog('optIn() erro: ' + e.message);
                     }});
                 }};
                 document.getElementById('pwa-notif-close').onclick = function() {{
                     localStorage.setItem('notif_asked', '1');
                     bar.remove();
-                    pwaLog('Barra fechada pelo usuário');
+                    pwaLog('Barra fechada pelo usuario');
                 }};
             }}, 3000);
         }}
 
         function initOneSignalInApp() {{
             if (!isApp) {{
-                pwaLog('OneSignal ignorado: não é PWA');
+                pwaLog('OneSignal ignorado: nao e PWA');
                 return;
             }}
 
             var appId = '{onesignal_app_id}';
             if (!appId) {{
-                pwaLog('❌ OneSignal: onesignal_app_id não configurado para esta loja');
+                pwaLog('OneSignal: onesignal_app_id nao configurado');
                 return;
             }}
 
-            // ✅ Desregistra SW antigo (escopo /) antes de registrar novo (/apps/app-builder/)
             if ('serviceWorker' in navigator) {{
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {{
                     registrations.forEach(function(r) {{
                         if (r.scope.endsWith('/') && !r.scope.includes('/apps/')) {{
-                            pwaLog('SW antigo: ' + r.scope + ' — desregistrando...');
+                            pwaLog('SW antigo desregistrando: ' + r.scope);
                             r.unregister();
                         }}
                     }});
                 }});
             }}
 
-            // ✅ Registra SW manualmente via proxy Nuvemshop antes do OneSignal init
             if ("serviceWorker" in navigator) {{
                 navigator.serviceWorker.register("/apps/app-builder/service-worker.js", {{ scope: "/apps/app-builder/" }})
                     .then(function(reg) {{
-                        pwaLog("✅ SW registrado: " + reg.scope);
+                        pwaLog("SW registrado: " + reg.scope);
                     }})
                     .catch(function(err) {{
-                        pwaLog("❌ SW erro: " + err.message);
+                        pwaLog("SW erro: " + err.message);
                     }});
             }}
 
@@ -495,7 +578,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         serviceWorkerPath: '/apps/app-builder/service-worker.js',
                         serviceWorkerParam: {{ scope: '/apps/app-builder/' }},
                     }});
-                    pwaLog('✅ OneSignal.init() concluído — appId: ' + appId.substring(0,8) + '...');
+                    pwaLog('OneSignal.init() concluido - appId: ' + appId.substring(0,8) + '...');
 
                     var nativePerm = typeof Notification !== 'undefined' ? Notification.permission : 'indisponivel';
                     pwaLog('Notification.permission: ' + nativePerm);
@@ -506,17 +589,18 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                         pwaLog('subscription id: ' + (subId || 'null'));
                     }} catch(e) {{ pwaLog('Erro ao ler sub: ' + e.message); }}
 
+                    initUserIdentity();
                     initNotificationBar();
                 }} catch(err) {{
-                    pwaLog('❌ Erro no OneSignal.init(): ' + err.message);
+                    pwaLog('Erro no OneSignal.init(): ' + err.message);
                 }}
             }});
 
             if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {{
                 var sdkScript = document.createElement('script');
                 sdkScript.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-                sdkScript.onload = function() {{ pwaLog('✅ SDK carregado (onload)'); }};
-                sdkScript.onerror = function() {{ pwaLog('❌ ERRO ao carregar SDK'); }};
+                sdkScript.onload = function() {{ pwaLog('SDK carregado (onload)'); }};
+                sdkScript.onerror = function() {{ pwaLog('ERRO ao carregar SDK'); }};
                 document.head.appendChild(sdkScript);
                 pwaLog('SDK OneSignal injetado');
             }}
@@ -529,10 +613,10 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             var isSamsung = ua.toLowerCase().indexOf('samsungbrowser') !== -1;
             var isSafari = ua.includes('Safari') && !ua.includes('Chrome');
             var steps = isSamsung
-                ? "1. Toque no menu (⋮).\\n2. Escolha Adicionar à Tela inicial.\\n3. Confirme e toque em Adicionar."
+                ? "1. Toque no menu.\n2. Escolha Adicionar a Tela inicial.\n3. Confirme e toque em Adicionar."
                 : isSafari
-                ? "1. Toque no ícone de compartilhar.\\n2. Selecione Adicionar à Tela de Início.\\n3. Confirme e toque em Adicionar."
-                : "1. Abra o menu do navegador.\\n2. Toque em Instalar app ou Adicionar à Tela inicial.\\n3. Confirme para instalar.";
+                ? "1. Toque no icone de compartilhar.\n2. Selecione Adicionar a Tela de Inicio.\n3. Confirme e toque em Adicionar."
+                : "1. Abra o menu do navegador.\n2. Toque em Instalar app ou Adicionar a Tela inicial.\n3. Confirme para instalar.";
             var modal = document.createElement('div');
             modal.id = 'pwa-install-modal';
             modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2147483648;display:flex;align-items:center;justify-content:center;";
@@ -582,46 +666,40 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             }} catch(e) {{}}
         }}
 
-        // ✅ ESPIÃO DO CARRINHO ABANDONADO (ON-THE-FLY)
         function initCartTracking() {{
             try {{
-                // 1. Se finalizou a compra, remove a tag e para de monitorar
                 if (window.location.href.includes('/checkout/success') || window.location.href.includes('/order-received')) {{
                     window.OneSignalDeferred = window.OneSignalDeferred || [];
                     window.OneSignalDeferred.push(function(OneSignal) {{
                         OneSignal.User.addTag("carrinho_ativo", "false");
-                        pwaLog("🛒 Compra concluída! Tag 'carrinho_ativo' definida como false");
+                        pwaLog("Compra concluida! Tag carrinho_ativo = false");
                     }});
-                    return; // Interrompe o espião nesta página
+                    return;
                 }}
 
-                // 2. Monitoramento silencioso (A cada 3 segundos confere se tem itens no carrinho da Nuvemshop)
                 var lastCartCount = -1;
                 setInterval(function() {{
                     try {{
                         if (window.LS && window.LS.cart && Array.isArray(window.LS.cart.items)) {{
                             var currentCount = window.LS.cart.items.length;
-                            
-                            // Se a quantidade de itens mudou (adicionou ou removeu)
                             if (currentCount !== lastCartCount) {{
                                 lastCartCount = currentCount;
                                 window.OneSignalDeferred = window.OneSignalDeferred || [];
-                                
                                 window.OneSignalDeferred.push(function(OneSignal) {{
                                     if (currentCount > 0) {{
                                         OneSignal.User.addTag("carrinho_ativo", "true");
-                                        pwaLog("🛒 Carrinho atualizado: true (" + currentCount + " itens)");
+                                        pwaLog("Carrinho: true (" + currentCount + " itens)");
                                     }} else {{
                                         OneSignal.User.addTag("carrinho_ativo", "false");
-                                        pwaLog("🛒 Carrinho esvaziado: false");
+                                        pwaLog("Carrinho: false (vazio)");
                                     }}
                                 }});
                             }}
                         }}
                     }} catch(err) {{}}
-                }}, 3000); // 3000ms = 3 segundos
+                }}, 3000);
             }} catch(e) {{
-                pwaLog('❌ Erro no Cart Tracking: ' + e.message);
+                pwaLog('Erro Cart Tracking: ' + e.message);
             }}
         }}
 
@@ -631,7 +709,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
             initAnalytics();
             initOneSignalInApp();
         }} catch(e) {{
-            pwaLog('❌ Erro crítico: ' + e.message);
+            pwaLog('Erro critico: ' + e.message);
         }}
 
         if (document.readyState === 'loading') {{
@@ -652,7 +730,7 @@ def get_loader(store_id: str, request: Request, db: Session = Depends(get_db)):
                 if (typeof initInstallPopup === 'function') initInstallPopup();
                 initVariantTracking();
                 initSalesTracking();
-                initCartTracking(); // 👈 Inicializa o rastreio do carrinho aqui!
+                initCartTracking();
             }} catch(e) {{}}
         }}, 800);
 
